@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHIRP Web</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/png" href="../chirp/share/chirp.png">
+</head>
+<body>
+    <!-- Hidden file input -->
+    <input type="file" id="file-input" accept=".csv,.img,.chirp" style="display: none">
+
+    <!-- Header with menu bar -->
+    <header class="header">
+        <div class="logo">
+            <img src="../chirp/share/chirp.png" alt="CHIRP" class="logo-img" onerror="this.style.display='none'">
+            <span id="header-title">CHIRP Web</span>
+        </div>
+        <nav class="menu-bar">
+            <div class="menu-dropdown">
+                <button class="menu-button">File</button>
+                <div class="menu-content">
+                    <div class="menu-item" id="menu-new">
+                        <span>New</span>
+                        <span class="shortcut">Ctrl+N</span>
+                    </div>
+                    <div class="menu-item" id="menu-open">
+                        <span>Open...</span>
+                        <span class="shortcut">Ctrl+O</span>
+                    </div>
+                    <div class="menu-divider"></div>
+                    <div class="menu-item" id="menu-save">
+                        <span>Save</span>
+                        <span class="shortcut">Ctrl+S</span>
+                    </div>
+                    <div class="menu-item" id="menu-save-as">
+                        <span>Save As...</span>
+                        <span class="shortcut">Ctrl+Shift+S</span>
+                    </div>
+                    <div class="menu-divider"></div>
+                    <div class="menu-item" id="menu-import">
+                        <span>Import...</span>
+                    </div>
+                    <div class="menu-item" id="menu-export">
+                        <span>Export to CSV...</span>
+                        <span class="shortcut">Ctrl+E</span>
+                    </div>
+                    <div class="menu-divider"></div>
+                    <div class="menu-submenu">
+                        <div class="menu-item">
+                            <span>Open Stock Config</span>
+                            <span class="arrow">&#9654;</span>
+                        </div>
+                        <div class="menu-content submenu" id="stock-config-menu">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-dropdown">
+                <button class="menu-button">Edit</button>
+                <div class="menu-content">
+                    <div class="menu-item" id="menu-cut">
+                        <span>Cut</span>
+                        <span class="shortcut">Ctrl+X</span>
+                    </div>
+                    <div class="menu-item" id="menu-copy">
+                        <span>Copy</span>
+                        <span class="shortcut">Ctrl+C</span>
+                    </div>
+                    <div class="menu-item" id="menu-paste">
+                        <span>Paste</span>
+                        <span class="shortcut">Ctrl+V</span>
+                    </div>
+                    <div class="menu-item" id="menu-delete">
+                        <span>Delete</span>
+                        <span class="shortcut">Del</span>
+                    </div>
+                    <div class="menu-divider"></div>
+                    <div class="menu-item" id="menu-select-all">
+                        <span>Select All</span>
+                        <span class="shortcut">Ctrl+A</span>
+                    </div>
+                    <div class="menu-divider"></div>
+                    <div class="menu-item" id="menu-insert">
+                        <span>Insert Row</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-dropdown">
+                <button class="menu-button">Radio</button>
+                <div class="menu-content">
+                    <div class="menu-item" id="menu-download">
+                        <span>Download from radio...</span>
+                        <span class="shortcut">Alt+D</span>
+                    </div>
+                    <div class="menu-item" id="menu-upload">
+                        <span>Upload to radio...</span>
+                        <span class="shortcut">Alt+U</span>
+                    </div>
+                    <div class="menu-divider"></div>
+                    <div class="menu-item" id="menu-query-rb">
+                        <span>Query RepeaterBook...</span>
+                        <span class="shortcut">Alt+B</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-dropdown">
+                <button class="menu-button">Help</button>
+                <div class="menu-content">
+                    <div class="menu-item" id="menu-about">
+                        <span>About CHIRP Web</span>
+                    </div>
+                    <div class="menu-item" id="menu-docs">
+                        <span>Documentation</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <div class="radio-status">
+            <span id="radio-info"></span>
+        </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <button class="toolbar-btn" id="tb-new" title="New (Ctrl+N)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
+        </button>
+        <button class="toolbar-btn" id="tb-open" title="Open (Ctrl+O)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z"/></svg>
+        </button>
+        <button class="toolbar-btn" id="tb-save" title="Save (Ctrl+S)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>
+        </button>
+        <div class="toolbar-divider"></div>
+        <button class="toolbar-btn" id="tb-download" title="Download from radio (Alt+D)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+        </button>
+        <button class="toolbar-btn" id="tb-upload" title="Upload to radio (Alt+U)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M5,4H19V6H5M9,14H15V20H9M12,8L5,15H9V22H15V15H19L12,8Z"/></svg>
+        </button>
+        <div class="toolbar-divider"></div>
+        <button class="toolbar-btn" id="tb-cut" title="Cut (Ctrl+X)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19,3L13,9L15,11L22,4V3M12,12.5A0.5,0.5 0 0,1 11.5,12A0.5,0.5 0 0,1 12,11.5A0.5,0.5 0 0,1 12.5,12A0.5,0.5 0 0,1 12,12.5M6,20A2,2 0 0,1 4,18C4,16.89 4.9,16 6,16A2,2 0 0,1 8,18C8,19.11 7.1,20 6,20M6,8A2,2 0 0,1 4,6C4,4.89 4.9,4 6,4A2,2 0 0,1 8,6C8,7.11 7.1,8 6,8M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64Z"/></svg>
+        </button>
+        <button class="toolbar-btn" id="tb-copy" title="Copy (Ctrl+C)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg>
+        </button>
+        <button class="toolbar-btn" id="tb-paste" title="Paste (Ctrl+V)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19,20H5V4H7V7H17V4H19M12,2A1,1 0 0,1 13,3A1,1 0 0,1 12,4A1,1 0 0,1 11,3A1,1 0 0,1 12,2M19,2H14.82C14.4,0.84 13.3,0 12,0C10.7,0 9.6,0.84 9.18,2H5A2,2 0 0,0 3,4V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V4A2,2 0 0,0 19,2Z"/></svg>
+        </button>
+        <button class="toolbar-btn" id="tb-delete" title="Delete (Del)">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>
+        </button>
+    </div>
+
+    <!-- Main content area -->
+    <main class="main-content">
+        <div class="memory-grid-container">
+            <div id="memory-grid" class="memory-grid">
+                <!-- Memory table will be rendered here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Status bar -->
+    <footer class="status-bar">
+        <span id="status-message"></span>
+        <span id="selection-info"></span>
+    </footer>
+
+    <!-- Dialog overlay -->
+    <div id="dialog-overlay" class="dialog-overlay"></div>
+
+    <!-- Edit Memory Dialog -->
+    <div id="edit-dialog" class="dialog">
+        <div class="dialog-header">
+            <h3>Edit Memory</h3>
+            <button class="dialog-close">&times;</button>
+        </div>
+        <div class="dialog-body">
+            <form id="edit-form">
+                <input type="hidden" id="edit-location">
+                
+                <div class="form-row">
+                    <label for="edit-name">Name:</label>
+                    <input type="text" id="edit-name" maxlength="16">
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-freq">Frequency (MHz):</label>
+                    <input type="text" id="edit-freq" placeholder="146.520000">
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-duplex">Duplex:</label>
+                    <select id="edit-duplex">
+                        <option value="">(none)</option>
+                        <option value="+">+</option>
+                        <option value="-">-</option>
+                        <option value="split">Split</option>
+                        <option value="off">Off</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-offset">Offset (MHz):</label>
+                    <input type="text" id="edit-offset" placeholder="0.600000">
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-tmode">Tone Mode:</label>
+                    <select id="edit-tmode">
+                        <option value="">(none)</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-rtone">Tx Tone:</label>
+                    <select id="edit-rtone"></select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-ctone">Rx Tone:</label>
+                    <select id="edit-ctone"></select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-dtcs">DTCS Code:</label>
+                    <select id="edit-dtcs"></select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-mode">Mode:</label>
+                    <select id="edit-mode">
+                        <option value="FM">FM</option>
+                        <option value="NFM">NFM</option>
+                        <option value="AM">AM</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-skip">Skip:</label>
+                    <select id="edit-skip">
+                        <option value="">(none)</option>
+                        <option value="S">Skip</option>
+                        <option value="P">Priority</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-power">Power:</label>
+                    <input type="text" id="edit-power" placeholder="Low, Medium, High">
+                </div>
+                
+                <div class="form-row">
+                    <label for="edit-comment">Comment:</label>
+                    <input type="text" id="edit-comment">
+                </div>
+            </form>
+        </div>
+        <div class="dialog-footer">
+            <button class="btn dialog-cancel">Cancel</button>
+            <button class="btn btn-primary" id="edit-save">Save</button>
+        </div>
+    </div>
+
+    <!-- RepeaterBook Dialog -->
+    <div id="repeaterbook-dialog" class="dialog dialog-large">
+        <div class="dialog-header">
+            <h3>Query RepeaterBook</h3>
+            <button class="dialog-close">&times;</button>
+        </div>
+        <div class="dialog-body">
+            <div class="rb-search-form">
+                <div class="form-row">
+                    <label for="rb-country">Country:</label>
+                    <select id="rb-country"></select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="rb-state">State/Province:</label>
+                    <select id="rb-state">
+                        <option value="">All States</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="rb-band">Band:</label>
+                    <select id="rb-band">
+                        <option value="">All Bands</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="rb-mode">Mode:</label>
+                    <select id="rb-mode">
+                        <option value="">All Modes</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <label>
+                        <input type="checkbox" id="rb-open-only" checked>
+                        Open repeaters only
+                    </label>
+                </div>
+                
+                <div class="form-row">
+                    <button class="btn btn-primary" id="rb-search">Search</button>
+                </div>
+            </div>
+            
+            <div id="rb-results" class="rb-results">
+                <!-- Results will be displayed here -->
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <button class="btn dialog-cancel">Close</button>
+        </div>
+    </div>
+
+    <!-- About Dialog -->
+    <div id="about-dialog" class="dialog">
+        <div class="dialog-header">
+            <h3>About CHIRP Web</h3>
+            <button class="dialog-close">&times;</button>
+        </div>
+        <div class="dialog-body">
+            <div class="about-content">
+                <img src="../chirp/share/chirp.png" alt="CHIRP" class="about-logo" onerror="this.style.display='none'">
+                <h2>CHIRP Web</h2>
+                <p>A vanilla JavaScript web application for programming amateur radios.</p>
+                <p>Based on the CHIRP project: <a href="https://chirpmyradio.com" target="_blank">chirpmyradio.com</a></p>
+                <h4>Features:</h4>
+                <ul>
+                    <li>Load/save CHIRP CSV files</li>
+                    <li>Web Serial API for direct radio communication</li>
+                    <li>RepeaterBook integration for frequency lookups</li>
+                    <li>Built-in stock configurations (FRS, GMRS, MURS, etc.)</li>
+                </ul>
+                <p><strong>Note:</strong> Web Serial API requires Chrome or Edge browser.</p>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <button class="btn btn-primary dialog-close">OK</button>
+        </div>
+    </div>
+
+    <!-- Radio Selection Dialog -->
+    <div id="radio-dialog" class="dialog">
+        <div class="dialog-header">
+            <h3>Select Radio</h3>
+            <button class="dialog-close">&times;</button>
+        </div>
+        <div class="dialog-body">
+            <div class="form-row">
+                <label for="radio-vendor">Vendor:</label>
+                <select id="radio-vendor">
+                    <option value="">-- Select Vendor --</option>
+                    <option value="anytone">Anytone</option>
+                    <option value="baofeng">Baofeng</option>
+                    <option value="btech">BTECH</option>
+                    <option value="icom">Icom</option>
+                    <option value="kenwood">Kenwood</option>
+                    <option value="radioddity">Radioddity</option>
+                    <option value="retevis">Retevis</option>
+                    <option value="tyt">TYT</option>
+                    <option value="wouxun">Wouxun</option>
+                    <option value="yaesu">Yaesu</option>
+                    <option value="generic">Generic/Other</option>
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <label for="radio-model">Model:</label>
+                <select id="radio-model">
+                    <option value="">-- Select Model --</option>
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <label for="radio-baud">Baud Rate:</label>
+                <select id="radio-baud">
+                    <option value="9600">9600 (most common)</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200">115200</option>
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <label for="radio-memsize">Memory Size:</label>
+                <select id="radio-memsize">
+                    <option value="8192">8 KB (most common)</option>
+                    <option value="16384">16 KB</option>
+                    <option value="32768">32 KB</option>
+                    <option value="65536">64 KB</option>
+                </select>
+            </div>
+            
+            <div style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: var(--border-radius);">
+                <strong>Instructions:</strong>
+                <ol style="margin: 8px 0 0 20px; font-size: 13px;">
+                    <li>Connect programming cable to radio and computer</li>
+                    <li>Turn radio ON</li>
+                    <li>Put radio in clone/program mode (if required)</li>
+                    <li>Click "Connect" to select the serial port</li>
+                </ol>
+                <p style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);">
+                    Note: Radio support is experimental. For best results, use CSV import/export with the CHIRP desktop app.
+                </p>
+            </div>
+        </div>
+        <div class="dialog-footer">
+            <button class="btn dialog-cancel">Cancel</button>
+            <button class="btn btn-primary" id="radio-connect">Connect</button>
+        </div>
+    </div>
+
+    <!-- Progress Dialog -->
+    <div id="progress-dialog" class="dialog">
+        <div class="dialog-header">
+            <h3 id="progress-title">Working...</h3>
+        </div>
+        <div class="dialog-body">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <p id="progress-message">Please wait...</p>
+        </div>
+        <div class="dialog-footer">
+            <button class="btn" id="progress-cancel">Cancel</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+    <script>
+        // Toolbar button bindings
+        document.addEventListener('DOMContentLoaded', () => {
+            const bindings = {
+                'tb-new': 'menu-new',
+                'tb-open': 'menu-open',
+                'tb-save': 'menu-save',
+                'tb-download': 'menu-download',
+                'tb-upload': 'menu-upload',
+                'tb-cut': 'menu-cut',
+                'tb-copy': 'menu-copy',
+                'tb-paste': 'menu-paste',
+                'tb-delete': 'menu-delete'
+            };
+            
+            for (const [tbId, menuId] of Object.entries(bindings)) {
+                const tb = document.getElementById(tbId);
+                const menu = document.getElementById(menuId);
+                if (tb && menu) {
+                    tb.addEventListener('click', () => menu.click());
+                }
+            }
+
+            // About dialog
+            document.getElementById('menu-about')?.addEventListener('click', () => {
+                document.getElementById('about-dialog').classList.add('visible');
+                document.getElementById('dialog-overlay').classList.add('visible');
+            });
+
+            // Documentation link
+            document.getElementById('menu-docs')?.addEventListener('click', () => {
+                window.open('https://chirpmyradio.com/projects/chirp/wiki/Documentation', '_blank');
+            });
+        });
+    </script>
+</body>
+</html>
