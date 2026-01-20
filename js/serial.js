@@ -1,22 +1,94 @@
 /**
+ * ============================================================================
  * CHIRP Web - Web Serial API Handler
- * Handles serial communication with radios
+ * ============================================================================
+ * 
+ * OVERVIEW:
+ * This module provides serial communication capabilities for programming
+ * amateur radios directly from the web browser. It uses the Web Serial API,
+ * which is only available in Chromium-based browsers (Chrome, Edge).
+ * 
+ * KEY CLASSES:
+ *   SerialConnection - Low-level serial port management
+ *   RadioClone       - High-level radio communication protocol handler
+ * 
+ * SERIAL COMMUNICATION BASICS:
+ * Radios communicate over serial connections (typically USB-to-serial adapters)
+ * with parameters:
+ *   - Baud Rate  : Speed in bits/second (9600-115200 common)
+ *   - Data Bits  : Bits per character (usually 8)
+ *   - Stop Bits  : Frame termination (usually 1)
+ *   - Parity     : Error checking (usually none)
+ *   - Flow Control: Hardware/software flow control (usually none)
+ * 
+ * RADIO CLONE PROTOCOLS:
+ * Each radio family uses a specific communication protocol:
+ *   1. HANDSHAKE  : Establish communication (magic bytes, identification)
+ *   2. READ       : Download memory in blocks (address, size, data)
+ *   3. WRITE      : Upload memory in blocks (address, size, data, ACK)
+ *   4. ENCRYPTION : Some radios encrypt memory data (XOR-based)
+ * 
+ * COMMON USB-SERIAL CHIP VENDORS:
+ *   - Prolific (PL2303)        : 0x067B - Older programming cables
+ *   - FTDI (FT232)             : 0x0403 - Quality cables
+ *   - Silicon Labs (CP210x)    : 0x10C4 - Common in modern cables
+ *   - WCH (CH340/CH341)        : 0x1A86 - Budget cables
+ *   - Baofeng Direct USB       : 0x28E9 - Integrated USB radios
+ * 
+ * ============================================================================
  */
 
 /**
- * SerialConnection class - manages a Web Serial API connection
+ * ============================================================================
+ * SerialConnection Class
+ * ============================================================================
+ * Manages a Web Serial API connection to a USB-serial adapter.
+ * Provides low-level read/write operations with timeout support.
+ * 
+ * USAGE:
+ *   const conn = new SerialConnection();
+ *   await conn.requestPort();    // User selects port
+ *   await conn.open({ baudRate: 9600 });
+ *   await conn.write([0x50, 0x52, 0x4F, 0x47]);  // Write bytes
+ *   const response = await conn.read(4, 1000);   // Read 4 bytes, 1s timeout
+ *   await conn.close();
+ * 
+ * SERIAL SIGNALS:
+ * In addition to data, serial ports have control signals:
+ *   - DTR (Data Terminal Ready) : Indicates computer is ready
+ *   - RTS (Request To Send)     : Flow control / wake-up signal
+ *   - CTS (Clear To Send)       : Device is ready (input)
+ *   - DSR (Data Set Ready)      : Device is present (input)
+ * 
+ * Many programming cables require DTR/RTS to be set to power the radio's
+ * programming interface or to wake it from standby.
  */
 export class SerialConnection {
+    /**
+     * Create a new SerialConnection instance.
+     * Does not connect - call requestPort() and open() to connect.
+     */
     constructor() {
+        // Web Serial API port object
         this.port = null;
+        
+        // Stream reader/writer for async I/O
         this.reader = null;
         this.writer = null;
+        
+        // Promises for stream closure
         this.readableStreamClosed = null;
         this.writableStreamClosed = null;
+        
+        // Connection state
         this.connected = false;
-        this.onReceive = null;
-        this.onError = null;
-        this.onDisconnect = null;
+        
+        // Event callbacks
+        this.onReceive = null;     // Called when data received (continuous mode)
+        this.onError = null;       // Called on error
+        this.onDisconnect = null;  // Called on disconnect
+        
+        // Default serial parameters (common for amateur radios)
         this.baudRate = 9600;
         this.dataBits = 8;
         this.stopBits = 1;
@@ -25,35 +97,60 @@ export class SerialConnection {
     }
 
     /**
-     * Check if Web Serial API is supported
+     * Check if Web Serial API is supported in this browser.
+     * 
+     * Web Serial API Requirements:
+     *   - Chrome 89+ or Edge 89+ (Chromium-based)
+     *   - Secure context (HTTPS or localhost)
+     *   - User gesture required for requestPort()
+     * 
+     * @returns {boolean} True if Web Serial API is available
      */
     static isSupported() {
         return 'serial' in navigator;
     }
 
     /**
-     * Get list of known radio filters for the serial port picker
+     * Get USB vendor ID filters for known radio programming cables.
+     * 
+     * When requesting a serial port, these filters help the browser
+     * show only relevant devices in the port picker dialog.
+     * 
+     * Common USB-to-Serial Chip Vendors:
+     *   0x067B - Prolific PL2303 (older cables, sometimes problematic drivers)
+     *   0x0403 - FTDI FT232 (high quality, reliable)
+     *   0x10C4 - Silicon Labs CP210x (common in modern cables)
+     *   0x1A86 - WCH CH340/CH341 (budget cables, may need drivers)
+     *   0x28E9 - Baofeng/QYT direct USB (built-in USB in some radios)
+     *   0x1D6B - QYT/Radtel (some newer radios)
+     * 
+     * @returns {Array} Array of USB vendor ID filter objects
      */
     static getRadioFilters() {
-        // Common USB-to-Serial adapters used by radios
         return [
-            // Prolific
-            { usbVendorId: 0x067B },
-            // FTDI
-            { usbVendorId: 0x0403 },
-            // Silicon Labs CP210x
-            { usbVendorId: 0x10C4 },
-            // WCH CH340/CH341
-            { usbVendorId: 0x1A86 },
-            // Baofeng/etc direct USB
-            { usbVendorId: 0x28E9 },
-            // QYT/Radtel
-            { usbVendorId: 0x1D6B }
+            { usbVendorId: 0x067B },  // Prolific PL2303
+            { usbVendorId: 0x0403 },  // FTDI FT232
+            { usbVendorId: 0x10C4 },  // Silicon Labs CP210x
+            { usbVendorId: 0x1A86 },  // WCH CH340/CH341
+            { usbVendorId: 0x28E9 },  // Baofeng direct USB
+            { usbVendorId: 0x1D6B }   // QYT/Radtel
         ];
     }
 
     /**
-     * Request a serial port from the user
+     * Request user to select a serial port.
+     * 
+     * This triggers the browser's port picker dialog.
+     * The user must grant permission to access the selected port.
+     * 
+     * SECURITY:
+     * Web Serial API requires:
+     *   1. Secure context (HTTPS or localhost)
+     *   2. User gesture (button click, etc.)
+     *   3. Explicit user permission via port picker
+     * 
+     * @returns {Promise<boolean>} True if port selected, false if cancelled
+     * @throws {Error} If Web Serial API not supported or permission denied
      */
     async requestPort() {
         if (!SerialConnection.isSupported()) {
@@ -61,20 +158,21 @@ export class SerialConnection {
         }
 
         try {
-            // Request port with common radio USB vendor IDs
+            // First attempt: Show only known radio cable vendors
             this.port = await navigator.serial.requestPort({
                 filters: SerialConnection.getRadioFilters()
             });
             return true;
         } catch (e) {
             if (e.name === 'NotFoundError') {
-                // User cancelled the picker - try without filters
+                // User cancelled, or no matching devices found
+                // Try again without filters to show all serial ports
                 try {
                     this.port = await navigator.serial.requestPort();
                     return true;
                 } catch (e2) {
                     if (e2.name === 'NotFoundError') {
-                        return false; // User cancelled
+                        return false; // User cancelled port picker
                     }
                     throw e2;
                 }
@@ -84,13 +182,30 @@ export class SerialConnection {
     }
 
     /**
-     * Open the serial connection
+     * Open the serial connection with specified parameters.
+     * 
+     * SERIAL PARAMETERS:
+     *   baudRate    : Bits per second (9600, 19200, 38400, 57600, 115200)
+     *   dataBits    : Bits per character (7, 8)
+     *   stopBits    : Stop bits (1, 2)
+     *   parity      : Error checking ('none', 'even', 'odd')
+     *   flowControl : Flow control ('none', 'hardware')
+     *   dtr         : Data Terminal Ready signal (true/false)
+     *   rts         : Request To Send signal (true/false)
+     * 
+     * Most amateur radios use: 9600 baud, 8 data bits, 1 stop bit, no parity
+     * Some newer radios (UV-17Pro) use 115200 baud.
+     * 
+     * @param {Object} options - Serial port options
+     * @returns {Promise<boolean>} True on success
+     * @throws {Error} If port not selected or open fails
      */
     async open(options = {}) {
         if (!this.port) {
             throw new Error('No port selected');
         }
 
+        // Merge options with defaults
         const settings = {
             baudRate: options.baudRate || this.baudRate,
             dataBits: options.dataBits || this.dataBits,
@@ -99,10 +214,14 @@ export class SerialConnection {
             flowControl: options.flowControl || this.flowControl
         };
 
+        // Open the port with specified settings
         await this.port.open(settings);
         this.connected = true;
 
-        // Set up signal lines if requested
+        // Set DTR/RTS signals if requested
+        // Many programming cables require these to be set
+        // DTR often provides power to the programming interface
+        // RTS may be used to wake the radio or enter programming mode
         if (options.dtr !== undefined || options.rts !== undefined) {
             await this.port.setSignals({
                 dataTerminalReady: options.dtr !== false,
@@ -114,21 +233,31 @@ export class SerialConnection {
     }
 
     /**
-     * Close the serial connection
+     * Close the serial connection.
+     * 
+     * This gracefully shuts down:
+     *   1. Cancel any pending read operations
+     *   2. Close the write stream
+     *   3. Close the port itself
+     * 
+     * Always call this when done to release the port for other applications.
      */
     async close() {
+        // Cancel any pending read
         if (this.reader) {
             await this.reader.cancel();
             await this.readableStreamClosed?.catch(() => {});
             this.reader = null;
         }
 
+        // Close writer
         if (this.writer) {
             await this.writer.close();
             await this.writableStreamClosed?.catch(() => {});
             this.writer = null;
         }
 
+        // Close port
         if (this.port) {
             await this.port.close();
             this.port = null;
@@ -138,15 +267,27 @@ export class SerialConnection {
     }
 
     /**
-     * Write data to the serial port
+     * Write data to the serial port.
+     * 
+     * Accepts multiple data formats:
+     *   - Uint8Array : Binary data (preferred)
+     *   - Array      : Array of byte values [0x50, 0x52, 0x4F, 0x47]
+     *   - String     : ASCII text (converted to bytes)
+     * 
+     * Data is sent immediately without buffering.
+     * 
+     * @param {Uint8Array|Array|string} data - Data to write
+     * @throws {Error} If not connected or invalid data type
      */
     async write(data) {
         if (!this.connected || !this.port) {
             throw new Error('Not connected');
         }
 
+        // Get a writer for this write operation
         const writer = this.port.writable.getWriter();
         try {
+            // Convert input to Uint8Array
             let dataToSend;
             if (data instanceof Uint8Array) {
                 dataToSend = data;
@@ -157,14 +298,31 @@ export class SerialConnection {
             } else {
                 throw new Error('Invalid data type');
             }
+            
+            // Write data to the port
             await writer.write(dataToSend);
         } finally {
+            // Always release the writer lock
             writer.releaseLock();
         }
     }
 
     /**
-     * Read data from the serial port
+     * Read a specific number of bytes from the serial port.
+     * 
+     * TIMEOUT BEHAVIOR:
+     * The read will return when either:
+     *   1. The requested number of bytes have been received
+     *   2. The timeout expires
+     *   3. The port is closed
+     * 
+     * If timeout expires before all bytes are received, returns
+     * whatever bytes were received (may be less than requested).
+     * 
+     * @param {number} length - Number of bytes to read (0 = read until timeout)
+     * @param {number} timeout - Timeout in milliseconds (default 5000)
+     * @returns {Promise<Uint8Array>} Received data
+     * @throws {Error} If not connected
      */
     async read(length = 0, timeout = 5000) {
         if (!this.connected || !this.port) {
@@ -178,12 +336,14 @@ export class SerialConnection {
         try {
             const startTime = Date.now();
 
+            // Read loop - continue until we have enough data or timeout
             while (length === 0 || totalRead < length) {
-                // Check timeout
+                // Check if we've exceeded the timeout
                 if (Date.now() - startTime > timeout) {
                     break;
                 }
 
+                // Race between reading data and timeout
                 const { value, done } = await Promise.race([
                     reader.read(),
                     new Promise((_, reject) => 
@@ -191,40 +351,52 @@ export class SerialConnection {
                     )
                 ]).catch(e => {
                     if (e.message === 'Timeout') {
-                        return { done: true };
+                        return { done: true };  // Timeout - stop reading
                     }
                     throw e;
                 });
 
                 if (done) {
-                    break;
+                    break;  // Stream ended or timeout
                 }
 
                 if (value) {
+                    // Append received bytes to buffer
                     buffer.push(...value);
                     totalRead += value.length;
                     
-                    // If we have enough data, break
+                    // If we have enough data, stop reading
                     if (length > 0 && totalRead >= length) {
                         break;
                     }
                 }
             }
         } finally {
+            // Always release the reader lock
             reader.releaseLock();
         }
 
+        // Return only the requested number of bytes
         return new Uint8Array(buffer.slice(0, length || buffer.length));
     }
 
     /**
-     * Read until a specific byte sequence is found
+     * Read until a specific byte sequence is found.
+     * 
+     * Useful for protocols where responses end with a known terminator
+     * (e.g., 0xDD for UV-5R identification response).
+     * 
+     * @param {Uint8Array|Array|string} terminator - Byte sequence to find
+     * @param {number} timeout - Timeout in milliseconds
+     * @returns {Promise<Uint8Array>} All data including terminator
+     * @throws {Error} If timeout expires before terminator found
      */
     async readUntil(terminator, timeout = 5000) {
         if (!this.connected || !this.port) {
             throw new Error('Not connected');
         }
 
+        // Convert terminator to Uint8Array
         const termBytes = typeof terminator === 'string' 
             ? new TextEncoder().encode(terminator)
             : new Uint8Array(terminator);
@@ -236,10 +408,12 @@ export class SerialConnection {
             const startTime = Date.now();
 
             while (true) {
+                // Check timeout
                 if (Date.now() - startTime > timeout) {
                     throw new Error('Timeout waiting for response');
                 }
 
+                // Read next chunk with remaining timeout
                 const { value, done } = await Promise.race([
                     reader.read(),
                     new Promise((_, reject) => 
@@ -259,11 +433,12 @@ export class SerialConnection {
                 if (value) {
                     buffer.push(...value);
                     
-                    // Check if buffer ends with terminator
+                    // Check if buffer ends with terminator sequence
                     if (buffer.length >= termBytes.length) {
                         const tail = buffer.slice(-termBytes.length);
-                        if (tail.every((b, i) => b === termBytes[i])) {
-                            break;
+                        const match = tail.every((b, i) => b === termBytes[i]);
+                        if (match) {
+                            break;  // Found terminator
                         }
                     }
                 }
@@ -276,7 +451,15 @@ export class SerialConnection {
     }
 
     /**
-     * Start continuous reading with a callback
+     * Start continuous reading with a callback.
+     * 
+     * Used for real-time data monitoring or protocols that
+     * require asynchronous data handling.
+     * 
+     * The callback is invoked for each chunk of data received.
+     * Reading continues until the port is closed.
+     * 
+     * @param {Function} callback - Called with (Uint8Array) for each chunk
      */
     async startReading(callback) {
         if (!this.connected || !this.port) {
@@ -285,6 +468,7 @@ export class SerialConnection {
 
         this.onReceive = callback;
 
+        // Continuous read loop
         while (this.port.readable && this.connected) {
             this.reader = this.port.readable.getReader();
             try {
@@ -309,7 +493,11 @@ export class SerialConnection {
     }
 
     /**
-     * Get port info
+     * Get information about the connected port.
+     * 
+     * Returns an object with USB vendor and product IDs if available.
+     * 
+     * @returns {Object|null} Port info or null if not connected
      */
     getInfo() {
         if (!this.port) {
@@ -319,7 +507,19 @@ export class SerialConnection {
     }
 
     /**
-     * Set serial signals (DTR, RTS)
+     * Set serial control signals (DTR, RTS).
+     * 
+     * DTR (Data Terminal Ready):
+     *   - Indicates the computer is ready to communicate
+     *   - Often provides power to programming interface circuits
+     *   - May trigger radio to enter programming mode
+     * 
+     * RTS (Request To Send):
+     *   - Traditional flow control signal
+     *   - May wake radio from standby
+     *   - Sometimes used as secondary power line
+     * 
+     * @param {Object} signals - { dataTerminalReady: bool, requestToSend: bool }
      */
     async setSignals(signals) {
         if (!this.connected || !this.port) {
@@ -329,7 +529,14 @@ export class SerialConnection {
     }
 
     /**
-     * Get serial signals (CTS, DCD, DSR, RI)
+     * Get serial input signals (CTS, DCD, DSR, RI).
+     * 
+     * CTS (Clear To Send)  : Device is ready to receive
+     * DCD (Data Carrier Detect): Carrier signal detected
+     * DSR (Data Set Ready) : Device is powered and ready
+     * RI  (Ring Indicator) : Incoming call (modem legacy)
+     * 
+     * @returns {Object} Signal states
      */
     async getSignals() {
         if (!this.connected || !this.port) {
@@ -339,24 +546,88 @@ export class SerialConnection {
     }
 }
 
+// Import radio protocol definitions
 import { getRadioProtocol, RADIO_PROTOCOLS } from './radio-defs.js';
 
 /**
- * RadioClone class - handles clone mode communication with radios
- * Uses protocol definitions from radio-defs.js
+ * ============================================================================
+ * RadioClone Class
+ * ============================================================================
+ * High-level radio communication handler.
+ * 
+ * OVERVIEW:
+ * This class implements the "clone" protocols used by amateur radios to
+ * upload and download memory contents. It handles:
+ *   - Protocol selection based on radio vendor/model
+ *   - Handshake/identification sequences
+ *   - Memory block reading and writing
+ *   - Data encryption/decryption (for radios that use it)
+ *   - Checksum calculation and verification
+ * 
+ * CLONE PROTOCOL PHASES:
+ * 
+ * 1. HANDSHAKE PHASE
+ *    Establishes communication with the radio:
+ *    a) Send "magic bytes" - vendor-specific identification sequence
+ *    b) Wait for ACK (0x06 typically)
+ *    c) Send identification request
+ *    d) Receive radio model/version info
+ * 
+ * 2. DOWNLOAD PHASE (Radio -> Computer)
+ *    Read memory in blocks:
+ *    a) Send read command with address and size
+ *    b) Receive data block from radio
+ *    c) Send ACK after each block
+ *    d) Decrypt data if necessary
+ *    e) Repeat until all memory read
+ * 
+ * 3. UPLOAD PHASE (Computer -> Radio)
+ *    Write memory in blocks:
+ *    a) Encrypt data if necessary
+ *    b) Send write command with address, size, and data
+ *    c) Wait for ACK from radio
+ *    d) Repeat until all memory written
+ * 
+ * COMMON PROTOCOL COMMANDS:
+ *   0x02 : Identification request
+ *   0x06 : ACK (acknowledgment)
+ *   0x52 : Read ('R')
+ *   0x53 : Read for some radios ('S')
+ *   0x57 : Write ('W')
+ *   0x58 : Read response / Write for some radios ('X')
+ * 
+ * MEMORY BLOCK FORMAT:
+ * Most radios use this block format for read/write:
+ *   [CMD][ADDR_HI][ADDR_LO][SIZE][DATA...][CHECKSUM?]
+ * 
+ * USAGE:
+ *   const clone = new RadioClone(serialConnection);
+ *   clone.setRadio('baofeng', 'uv5r');
+ *   clone.onProgress = (p) => console.log(p.message, p.percent);
+ *   const data = await clone.download(8192);
+ *   // ... modify data ...
+ *   await clone.upload(data);
  */
 export class RadioClone {
+    /**
+     * Create a RadioClone handler for a serial connection.
+     * 
+     * @param {SerialConnection} connection - Open serial connection
+     */
     constructor(connection) {
         this.connection = connection;
-        this.onProgress = null;
-        this.aborted = false;
-        this.vendor = '';
-        this.model = '';
-        this.protocol = null;
+        this.onProgress = null;    // Progress callback: ({ message, percent })
+        this.aborted = false;      // Set true to abort current operation
+        this.vendor = '';          // Radio vendor name
+        this.model = '';           // Radio model name
+        this.protocol = null;      // Protocol definition from radio-defs.js
     }
 
     /**
-     * Send progress update
+     * Send progress update to callback.
+     * 
+     * @param {string} message - Status message
+     * @param {number} percent - Progress percentage (0-100)
      */
     progress(message, percent) {
         if (this.onProgress) {
@@ -365,19 +636,31 @@ export class RadioClone {
     }
 
     /**
-     * Abort the current operation
+     * Abort the current operation.
+     * Sets a flag that is checked during download/upload loops.
      */
     abort() {
         this.aborted = true;
     }
     
     /**
-     * Set the radio protocol based on vendor/model
+     * Set the radio type and load its protocol definition.
+     * 
+     * The protocol defines:
+     *   - Handshake sequence (magic bytes, identification)
+     *   - Memory layout (regions, block sizes)
+     *   - Read/write command formats
+     *   - Encryption requirements
+     * 
+     * @param {string} vendor - Vendor name (e.g., 'baofeng')
+     * @param {string} model - Model name (e.g., 'uv5r')
      */
     setRadio(vendor, model) {
         this.vendor = vendor;
         this.model = model;
         this.protocol = getRadioProtocol(vendor, model);
+        
+        // Debug logging
         console.log('Using protocol:', this.protocol.name, 'for', vendor, model);
         console.log('Protocol baud rate:', this.protocol.baudRate);
         console.log('Protocol handshake type:', this.protocol.handshake?.type);
@@ -386,40 +669,76 @@ export class RadioClone {
         }
     }
     
-    // ==========================================
-    // Encryption/Decryption Methods
-    // ==========================================
+    /*
+     * =========================================================================
+     * ENCRYPTION/DECRYPTION METHODS
+     * =========================================================================
+     * Some radios encrypt their memory data to prevent unauthorized
+     * modification. The encryption is typically simple XOR-based schemes
+     * that are easily reversible.
+     */
     
     /**
-     * UV17Pro encryption table - XOR-based decryption/encryption
+     * XOR encryption key table for UV-17Pro family radios.
+     * 
+     * Each sub-array contains 4 bytes that are XORed cyclically
+     * with the memory data. Different radio models use different
+     * indices into this table.
+     * 
+     * The algorithm:
+     *   1. For each byte at position i
+     *   2. Get key byte from symbols[i % 4]
+     *   3. XOR data byte with key byte (with some conditions)
+     * 
+     * Radios using this encryption:
+     *   - UV-17Pro, UV-17ProGPS (index 1)
+     *   - BF-F8HP Pro (index 3)
+     *   - UV-K5 variants
      */
     static ENCRYPT_SYMBOLS = [
-        [0x42, 0x48, 0x54, 0x20], // "BHT "
-        [0x43, 0x4F, 0x20, 0x37], // "CO 7"
-        [0x41, 0x20, 0x45, 0x53], // "A ES"
-        [0x20, 0x45, 0x49, 0x59], // " EIY"
-        [0x4D, 0x20, 0x50, 0x51], // "M PQ"
-        [0x58, 0x4E, 0x20, 0x59], // "XN Y"
-        [0x52, 0x56, 0x42, 0x20], // "RVB "
-        [0x20, 0x48, 0x51, 0x50], // " HQP"
-        [0x57, 0x20, 0x52, 0x43], // "W RC"
-        [0x4D, 0x53, 0x20, 0x4E], // "MS N"
-        [0x20, 0x53, 0x41, 0x54], // " SAT"
-        [0x4B, 0x20, 0x44, 0x48], // "K DH"
-        [0x5A, 0x4F, 0x20, 0x52], // "ZO R"
-        [0x43, 0x20, 0x53, 0x4C], // "C SL"
-        [0x36, 0x52, 0x42, 0x20], // "6RB "
-        [0x20, 0x4A, 0x43, 0x47], // " JCG"
-        [0x50, 0x4E, 0x20, 0x56], // "PN V"
-        [0x4A, 0x20, 0x50, 0x4B], // "J PK"
-        [0x45, 0x4B, 0x20, 0x4C], // "EK L"
-        [0x49, 0x20, 0x4C, 0x5A]  // "I LZ"
+        [0x42, 0x48, 0x54, 0x20], // "BHT " - Index 0
+        [0x43, 0x4F, 0x20, 0x37], // "CO 7" - Index 1 (UV-17Pro)
+        [0x41, 0x20, 0x45, 0x53], // "A ES" - Index 2
+        [0x20, 0x45, 0x49, 0x59], // " EIY" - Index 3 (BF-F8HP Pro)
+        [0x4D, 0x20, 0x50, 0x51], // "M PQ" - Index 4
+        [0x58, 0x4E, 0x20, 0x59], // "XN Y" - Index 5
+        [0x52, 0x56, 0x42, 0x20], // "RVB " - Index 6
+        [0x20, 0x48, 0x51, 0x50], // " HQP" - Index 7
+        [0x57, 0x20, 0x52, 0x43], // "W RC" - Index 8
+        [0x4D, 0x53, 0x20, 0x4E], // "MS N" - Index 9
+        [0x20, 0x53, 0x41, 0x54], // " SAT" - Index 10
+        [0x4B, 0x20, 0x44, 0x48], // "K DH" - Index 11
+        [0x5A, 0x4F, 0x20, 0x52], // "ZO R" - Index 12
+        [0x43, 0x20, 0x53, 0x4C], // "C SL" - Index 13
+        [0x36, 0x52, 0x42, 0x20], // "6RB " - Index 14
+        [0x20, 0x4A, 0x43, 0x47], // " JCG" - Index 15
+        [0x50, 0x4E, 0x20, 0x56], // "PN V" - Index 16
+        [0x4A, 0x20, 0x50, 0x4B], // "J PK" - Index 17
+        [0x45, 0x4B, 0x20, 0x4C], // "EK L" - Index 18
+        [0x49, 0x20, 0x4C, 0x5A]  // "I LZ" - Index 19
     ];
     
     /**
-     * Decrypt/encrypt data for UV17Pro-style radios
-     * Used by: UV-17Pro, BF-F8HP Pro, UV-17ProGPS, etc.
-     * Note: The algorithm is symmetric (XOR), so encrypt and decrypt are the same
+     * Decrypt data from UV-17Pro-style radios.
+     * 
+     * ALGORITHM:
+     * For each byte in the buffer:
+     *   1. Get the key byte (symbols[position % 4])
+     *   2. If conditions are met, XOR data with key
+     *   3. Otherwise, keep data unchanged
+     * 
+     * CONDITIONS FOR XOR:
+     *   - Key byte is not 0x20 (space)
+     *   - Data byte is not 0x00 (null)
+     *   - Data byte is not 0xFF (empty)
+     *   - Data byte is not equal to key byte
+     *   - Data byte is not inverse of key byte
+     * 
+     * NOTE: Since XOR is symmetric, this function also encrypts.
+     * 
+     * @param {Uint8Array} buffer - Data to decrypt
+     * @param {number} symbolIndex - Index into ENCRYPT_SYMBOLS table
+     * @returns {Uint8Array} Decrypted data
      */
     decryptUV17Pro(buffer, symbolIndex) {
         const symbols = RadioClone.ENCRYPT_SYMBOLS[symbolIndex];
@@ -429,7 +748,8 @@ export class RadioClone {
             const keyByte = symbols[i % 4];
             const dataByte = buffer[i];
             
-            // Only XOR if certain conditions are met (matching original CHIRP logic)
+            // Determine if this byte should be XORed
+            // Based on reverse-engineering of the original CHIRP code
             const shouldEncrypt = (
                 keyByte !== 0x20 &&           // Key byte is not space
                 dataByte !== 0 &&              // Data is not 0x00
@@ -449,30 +769,50 @@ export class RadioClone {
     }
     
     /**
-     * Encrypt data for UV17Pro-style radios (same as decrypt since XOR is symmetric)
+     * Encrypt data for UV-17Pro-style radios.
+     * Since XOR is symmetric, encryption = decryption.
+     * 
+     * @param {Uint8Array} buffer - Data to encrypt
+     * @param {number} symbolIndex - Index into ENCRYPT_SYMBOLS table
+     * @returns {Uint8Array} Encrypted data
      */
     encryptUV17Pro(buffer, symbolIndex) {
         return this.decryptUV17Pro(buffer, symbolIndex);
     }
     
     /**
-     * Wouxun XOR chain encryption/decryption
-     * Used by: KGUV8D, KGUV8E, KGUV8D Plus, KG-935G, etc.
+     * Wouxun XOR chain encryption/decryption.
+     * 
+     * ALGORITHM:
+     * This uses a chained XOR where each byte's decryption depends
+     * on the previous byte.
+     * 
+     * Decrypt (backwards):
+     *   result[n] = data[n] XOR data[n-1]
+     *   result[0] = data[0] XOR initial_value
+     * 
+     * Encrypt (forwards):
+     *   result[0] = initial_value XOR data[0]
+     *   result[n] = result[n-1] XOR data[n]
+     * 
+     * Used by: KG-UV8D, KG-UV8E, KG-UV9D Plus, KG-935G, etc.
+     * 
      * @param {Uint8Array} data - Data to encrypt/decrypt
-     * @param {number} valxor - Initial XOR value (0x57 for most Wouxun radios)
+     * @param {number} valxor - Initial XOR value (0x57 for most Wouxun)
      * @param {boolean} decrypt - True to decrypt, false to encrypt
+     * @returns {Uint8Array} Processed data
      */
     wouxunCrypt(data, valxor = 0x57, decrypt = true) {
         const result = new Uint8Array(data.length);
         
         if (decrypt) {
-            // Decrypt: work backwards
+            // Decrypt: work backwards through the data
             for (let i = data.length - 1; i > 0; i--) {
                 result[i] = data[i] ^ data[i - 1];
             }
             result[0] = data[0] ^ valxor;
         } else {
-            // Encrypt: work forwards
+            // Encrypt: work forwards through the data
             result[0] = valxor ^ data[0];
             for (let i = 1; i < data.length; i++) {
                 result[i] = result[i - 1] ^ data[i];
@@ -482,25 +822,39 @@ export class RadioClone {
         return result;
     }
     
-    // ==========================================
-    // Checksum Methods
-    // ==========================================
+    /*
+     * =========================================================================
+     * CHECKSUM METHODS
+     * =========================================================================
+     * Some protocols include checksums in data blocks to verify integrity.
+     */
     
     /**
-     * Simple sum checksum (mod 256)
-     * Used by: Retevis RT98/RB15, Kenwood TK series, TH9000, iRadio, etc.
+     * Calculate simple sum checksum (mod 256).
+     * 
+     * ALGORITHM: Sum all bytes, take result mod 256
+     * Used by: Retevis RT98/RB15, Kenwood TK series, TH9000, etc.
+     * 
+     * @param {Uint8Array} data - Data to checksum
+     * @param {number} startOffset - Initial value to add
+     * @returns {number} Checksum value (0-255)
      */
     static checksumSum(data, startOffset = 0) {
         let cs = startOffset;
         for (const byte of data) {
-            cs = (cs + byte) & 0xFF;
+            cs = (cs + byte) & 0xFF;  // Keep to 8 bits
         }
         return cs;
     }
     
     /**
-     * XOR checksum
+     * Calculate XOR checksum.
+     * 
+     * ALGORITHM: XOR all bytes together
      * Used by: Leixen radios
+     * 
+     * @param {Uint8Array} data - Data to checksum
+     * @returns {number} Checksum value (0-255)
      */
     static checksumXor(data) {
         let cs = 0;
@@ -511,8 +865,15 @@ export class RadioClone {
     }
     
     /**
-     * Yaesu checksum - sum of bytes in a range stored at specific address
+     * Calculate Yaesu-style range checksum.
+     * 
+     * ALGORITHM: Sum bytes in a specific range
      * Used by: Yaesu VX, FT series
+     * 
+     * @param {Uint8Array} data - Full data buffer
+     * @param {number} start - Start index
+     * @param {number} stop - End index (inclusive)
+     * @returns {number} Checksum value (0-255)
      */
     static yaesuChecksum(data, start, stop) {
         let cs = 0;
@@ -523,7 +884,11 @@ export class RadioClone {
     }
     
     /**
-     * Verify checksum in received data
+     * Verify checksum in received data.
+     * 
+     * @param {Uint8Array} data - Data with checksum
+     * @param {string} checksumType - 'sum', 'xor', or 'yaesu'
+     * @param {Object} options - Additional options for checksum
      * @returns {boolean} True if checksum is valid
      */
     verifyChecksum(data, checksumType, options = {}) {
@@ -546,7 +911,12 @@ export class RadioClone {
     }
     
     /**
-     * Add checksum to data for transmission
+     * Add checksum to data for transmission.
+     * 
+     * @param {Uint8Array} data - Data to add checksum to
+     * @param {string} checksumType - 'sum', 'xor', or 'yaesu'
+     * @param {Object} options - Additional options
+     * @returns {Uint8Array} Data with checksum appended
      */
     addChecksum(data, checksumType, options = {}) {
         switch (checksumType) {
@@ -564,15 +934,26 @@ export class RadioClone {
     }
 
     /**
-     * Download from radio using configured protocol
+     * Download memory from radio.
+     * 
+     * PROCESS:
+     * 1. Perform handshake (establish communication)
+     * 2. Download memory blocks sequentially
+     * 3. Decrypt if radio uses encryption
+     * 4. Return complete memory image
+     * 
+     * @param {number} memorySize - Size of memory to download
+     * @returns {Promise<Uint8Array>} Complete memory contents
      */
     async download(memorySize) {
         this.aborted = false;
         
+        // Use generic protocol if none set
         if (!this.protocol) {
             this.protocol = RADIO_PROTOCOLS['generic'];
         }
         
+        // Get actual memory size from model definition
         const actualMemSize = this.protocol.modelDef?.memSize || memorySize;
         
         this.progress(`Starting download using ${this.protocol.name}...`, 0);
@@ -592,7 +973,31 @@ export class RadioClone {
     }
     
     /**
-     * Perform handshake based on protocol definition
+     * Perform protocol-specific handshake.
+     * 
+     * HANDSHAKE TYPES:
+     * 
+     * 'magic' (UV-5R family):
+     *   1. Send magic bytes one at a time with delays
+     *   2. Wait for ACK (0x06)
+     *   3. Send identification request (0x02)
+     *   4. Read identification response (ends with 0xDD)
+     *   5. Send ACK
+     * 
+     * 'program' (H777, BF-888S, older radios):
+     *   1. Send pre-command if defined
+     *   2. Send "PROGRAM" string
+     *   3. Wait for ACK
+     *   4. Send identification request
+     *   5. Read identification response
+     * 
+     * 'uv17pro' (UV-17Pro, BF-F8HP Pro):
+     *   1. Send 16-byte identification string
+     *   2. Wait for fingerprint response
+     *   3. Send additional magic commands (F, M, SEND)
+     *   4. Receive responses to each
+     * 
+     * @throws {Error} If handshake fails
      */
     async performHandshake() {
         const hs = this.protocol.handshake;
@@ -600,31 +1005,40 @@ export class RadioClone {
         this.progress('Sending handshake...', 5);
         
         if (hs.type === 'magic') {
-            // Get magic sequences to try
+            // =====================================================
+            // UV-5R FAMILY MAGIC BYTE HANDSHAKE
+            // =====================================================
+            // The UV-5R and related radios use a "magic" sequence
+            // to enter programming mode. The sequence is model-specific
+            // and must be sent byte-by-byte with precise timing.
+            
+            // Get magic sequences to try (some radios accept multiple)
             const magicSequences = hs.magicSequences || [hs.magic];
             let handshakeSuccess = false;
             let lastError = null;
             
+            // Try each magic sequence
             for (let seqIndex = 0; seqIndex < magicSequences.length; seqIndex++) {
                 const magic = magicSequences[seqIndex];
                 console.log(`Trying magic sequence ${seqIndex + 1}/${magicSequences.length}:`, 
                     magic.map(b => b.toString(16).padStart(2, '0')).join(' '));
                 
                 try {
-                    // Clear any pending data
+                    // Clear any pending data in the buffer
                     try {
                         await this.connection.read(100, 100);
                     } catch (e) {
-                        // Ignore timeout
+                        // Ignore timeout - expected if buffer is empty
                     }
                     
                     // Send magic bytes one at a time with delay
+                    // This timing is critical - too fast and radio may miss bytes
                     for (const byte of magic) {
                         await this.connection.write(new Uint8Array([byte]));
                         await this.delay(hs.magicDelay || 10);
                     }
                     
-                    // Wait for ACK with longer timeout
+                    // Wait for ACK response
                     console.log('Waiting for ACK...');
                     const ack = await this.connection.read(1, 3000);
                     console.log('Received:', ack.length > 0 ? `0x${ack[0].toString(16)}` : 'nothing');
@@ -662,6 +1076,7 @@ export class RadioClone {
                 await this.connection.write(new Uint8Array(hs.identCmd));
                 
                 // Read identification byte by byte until we get 0xDD or enough bytes
+                // UV-5R identification format: [model bytes...][0xDD]
                 const identResponse = [];
                 const maxIdent = hs.identLength || 12;
                 
@@ -699,13 +1114,19 @@ export class RadioClone {
             }
             
         } else if (hs.type === 'program') {
+            // =====================================================
+            // PROGRAM STRING HANDSHAKE
+            // =====================================================
+            // Simpler radios (H777, BF-888S) use a "PROGRAM" string
+            // to enter programming mode.
+            
             // Send pre-command if defined
             if (hs.preCmd) {
                 await this.connection.write(new Uint8Array(hs.preCmd));
                 await this.delay(hs.preDelay || 100);
             }
             
-            // Send program command
+            // Send program command (typically "PROGRAM" ASCII)
             await this.connection.write(new Uint8Array(hs.programCmd));
             
             // Wait for ACK (with retries if specified)
@@ -752,11 +1173,18 @@ export class RadioClone {
             }
             
         } else if (hs.type === 'uv17pro') {
-            // UV17Pro / BF-F8HP Pro style handshake
-            // Send ident magic string and check for fingerprint response
+            // =====================================================
+            // UV-17PRO FAMILY HANDSHAKE
+            // =====================================================
+            // The UV-17Pro uses a more complex handshake with:
+            // - 16-byte identification string
+            // - Fingerprint response verification
+            // - Additional magic commands
+            
             let identSuccess = false;
             let lastError = null;
             
+            // Try each identification string
             for (const ident of hs.idents) {
                 const identStr = ident.map(b => String.fromCharCode(b)).join('');
                 console.log('Sending UV17Pro ident:', identStr);
@@ -804,7 +1232,7 @@ export class RadioClone {
                         continue;
                     }
                     
-                    // Check if response starts with fingerprint (startswith check like original CHIRP)
+                    // Check if response starts with fingerprint
                     if (response.length >= hs.fingerprint.length &&
                         hs.fingerprint.every((b, i) => response[i] === b)) {
                         console.log('Ident successful');
@@ -831,7 +1259,7 @@ export class RadioClone {
             
             this.progress('Ident acknowledged, sending magic commands...', 7);
             
-            // Send additional magic commands
+            // Send additional magic commands (F, M, SEND sequences)
             if (hs.magics) {
                 for (let i = 0; i < hs.magics.length; i++) {
                     const magic = hs.magics[i];
@@ -857,7 +1285,21 @@ export class RadioClone {
     }
     
     /**
-     * Download memory blocks based on protocol definition
+     * Download memory blocks based on protocol definition.
+     * 
+     * MEMORY LAYOUTS:
+     * 
+     * Single Region (most radios):
+     *   - mainStart: First address to read
+     *   - mainEnd: Last address to read
+     *   - Optionally auxStart/auxEnd for additional regions
+     * 
+     * Multi-Region (UV-17Pro):
+     *   - regions: Array of { start, size } objects
+     *   - Non-contiguous memory areas
+     * 
+     * @param {number} memorySize - Total size to download
+     * @returns {Promise<Array>} Downloaded data as byte array
      */
     async downloadBlocks(memorySize) {
         const buffer = [];
@@ -883,6 +1325,7 @@ export class RadioClone {
             console.log('Total regions:', layout.regions.length);
             console.log('Total expected size:', totalSize);
             
+            // Download each memory region
             for (const region of layout.regions) {
                 if (this.aborted) {
                     console.log('Download aborted');
@@ -926,7 +1369,6 @@ export class RadioClone {
         }
         
         // Standard single-region layout
-        // Read main memory region
         const mainStart = layout.mainStart || 0;
         const mainEnd = Math.min(layout.mainEnd || memorySize, memorySize);
         
@@ -957,7 +1399,26 @@ export class RadioClone {
     }
     
     /**
-     * Read a single block using protocol definition
+     * Read a single memory block from the radio.
+     * 
+     * BLOCK READ PROTOCOL:
+     * 
+     * Request Format:
+     *   [CMD][ADDR_HI][ADDR_LO][SIZE]
+     *   CMD: Read command (0x52 'R' or 0x53 'S')
+     *   ADDR: 16-bit big-endian address
+     *   SIZE: Number of bytes to read
+     * 
+     * Response Format (standard):
+     *   [CMD][ADDR_HI][ADDR_LO][SIZE][DATA...][ACK?]
+     * 
+     * Response Format (UV17Pro):
+     *   [HEADER 4 bytes][DATA...] (encrypted)
+     * 
+     * @param {number} address - Memory address to read
+     * @param {number} size - Number of bytes to read
+     * @param {boolean} isFirst - True if first block (some protocols differ)
+     * @returns {Promise<Uint8Array>} Block data
      */
     async readBlock(address, size, isFirst) {
         const read = this.protocol.read;
@@ -965,9 +1426,9 @@ export class RadioClone {
         // Build read command: cmd + address (2 bytes) + size (1 byte)
         const cmd = new Uint8Array([
             read.cmd,
-            (address >> 8) & 0xFF,
-            address & 0xFF,
-            size
+            (address >> 8) & 0xFF,   // Address high byte
+            address & 0xFF,          // Address low byte
+            size                     // Block size
         ]);
         await this.connection.write(cmd);
         
@@ -987,10 +1448,10 @@ export class RadioClone {
                 throw new Error(`Short read at address 0x${address.toString(16)}: got ${response.length}, expected ${size + 4}`);
             }
             
-            // Strip the 4-byte header
+            // Strip the 4-byte header, keep just data
             let chunk = response.slice(4);
             
-            // Decrypt if encryption is enabled
+            // Decrypt if encryption is enabled for this protocol
             if (this.protocol.encryption) {
                 chunk = this.decryptUV17Pro(chunk, this.protocol.encryption.symbolIndex);
             }
@@ -1004,17 +1465,19 @@ export class RadioClone {
             return chunk;
         }
         
-        // Standard protocol: Read response header if response command is defined
+        // Standard protocol: Read and validate response header
         if (read.responseCmd !== undefined) {
             const header = await this.connection.read(4, 2000);
             if (header.length !== 4) {
                 throw new Error(`Invalid response header at address 0x${address.toString(16)}`);
             }
             
+            // Validate response command byte
             if (header[0] !== read.responseCmd) {
                 throw new Error(`Unexpected response command 0x${header[0].toString(16)} at address 0x${address.toString(16)}`);
             }
             
+            // Validate address echo
             const respAddr = (header[1] << 8) | header[2];
             const respSize = header[3];
             
@@ -1039,18 +1502,27 @@ export class RadioClone {
     }
     
     /**
-     * Simple delay helper
+     * Simple delay helper.
+     * 
+     * @param {number} ms - Milliseconds to delay
+     * @returns {Promise} Resolves after delay
      */
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     /**
-     * Generic upload - writes raw memory to radio
-     * This is a placeholder - real implementations would be radio-specific
-     */
-    /**
-     * Upload to radio using configured protocol
+     * Upload memory to radio.
+     * 
+     * PROCESS:
+     * 1. Perform handshake (establish communication)
+     * 2. Encrypt data if required
+     * 3. Upload memory blocks sequentially
+     * 4. Wait for ACK after each block
+     * 
+     * WARNING: This overwrites the radio's memory!
+     * 
+     * @param {Uint8Array} data - Complete memory image to upload
      */
     async upload(data) {
         this.aborted = false;
@@ -1073,7 +1545,9 @@ export class RadioClone {
     }
     
     /**
-     * Upload memory blocks based on protocol definition
+     * Upload memory blocks based on protocol definition.
+     * 
+     * @param {Uint8Array} data - Memory data to upload
      */
     async uploadBlocks(data) {
         const write = this.protocol.write;
@@ -1147,7 +1621,23 @@ export class RadioClone {
     }
     
     /**
-     * Write a single block using protocol definition
+     * Write a single memory block to the radio.
+     * 
+     * BLOCK WRITE PROTOCOL:
+     * 
+     * Request Format:
+     *   [CMD][ADDR_HI][ADDR_LO][SIZE][DATA...]
+     *   CMD: Write command (0x57 'W' or 0x58 'X')
+     *   ADDR: 16-bit big-endian address
+     *   SIZE: Number of bytes in data
+     *   DATA: Block data
+     * 
+     * Response:
+     *   [ACK] (0x06 for success)
+     * 
+     * @param {number} address - Memory address to write
+     * @param {Uint8Array} data - Data to write
+     * @throws {Error} If write fails or no ACK received
      */
     async writeBlock(address, data) {
         const write = this.protocol.write;
@@ -1155,10 +1645,10 @@ export class RadioClone {
         // Build write command: cmd + address (2 bytes) + size (1 byte) + data
         const cmd = new Uint8Array([
             write.cmd,
-            (address >> 8) & 0xFF,
-            address & 0xFF,
-            data.length,
-            ...data
+            (address >> 8) & 0xFF,   // Address high byte
+            address & 0xFF,          // Address low byte
+            data.length,             // Block size
+            ...data                  // Block data
         ]);
         
         await this.connection.write(cmd);
@@ -1189,7 +1679,12 @@ export class RadioClone {
 }
 
 /**
- * Get list of available serial ports (if previously granted)
+ * Get list of previously granted serial ports.
+ * 
+ * The Web Serial API remembers ports the user has granted access to.
+ * This allows reconnecting without showing the port picker again.
+ * 
+ * @returns {Promise<Array>} Array of previously granted ports
  */
 export async function getAvailablePorts() {
     if (!SerialConnection.isSupported()) {
@@ -1199,7 +1694,11 @@ export async function getAvailablePorts() {
 }
 
 /**
- * Listen for serial port connect/disconnect events
+ * Listen for serial port connect/disconnect events.
+ * 
+ * Useful for detecting when programming cables are plugged in/out.
+ * 
+ * @param {Function} callback - Called with ('connect' or 'disconnect', port)
  */
 export function onPortChange(callback) {
     if (!SerialConnection.isSupported()) {

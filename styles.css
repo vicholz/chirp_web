@@ -1,49 +1,137 @@
 /**
+ * ============================================================================
  * CHIRP Web - Stylesheet
- * Modern, clean UI styling
+ * ============================================================================
+ * 
+ * OVERVIEW:
+ * This stylesheet defines all visual styling for the CHIRP Web application.
+ * It uses CSS custom properties (variables) for consistent theming and
+ * easy customization.
+ * 
+ * ARCHITECTURE:
+ * The styles are organized into logical sections:
+ *   1. CSS Variables (theming)
+ *   2. Reset & Base styles
+ *   3. Layout components (Header, Toolbar, Main, Footer)
+ *   4. Menu system
+ *   5. Memory table/grid
+ *   6. Dialog system
+ *   7. Form controls
+ *   8. Utility classes
+ *   9. Responsive adjustments
+ *   10. Print styles
+ * 
+ * DESIGN PRINCIPLES:
+ *   - Clean, modern appearance with subtle shadows
+ *   - Consistent spacing using 4px/8px/12px/16px scale
+ *   - Accessible color contrast ratios
+ *   - Smooth transitions for interactive elements
+ *   - Responsive layout for different screen sizes
+ * 
+ * THEMING:
+ * Colors and sizes are defined as CSS variables in :root.
+ * To create a dark theme, override these variables in a @media query
+ * or by adding a class to the body element.
  */
 
-/* CSS Variables for theming */
+/*
+ * ============================================================================
+ * CSS VARIABLES - THEMING
+ * ============================================================================
+ * All colors, sizes, and timing values are defined here as CSS custom
+ * properties. This enables:
+ *   - Consistent values across the stylesheet
+ *   - Easy theme modifications
+ *   - Runtime theme switching via JavaScript
+ */
 :root {
-    --primary-color: #2563eb;
-    --primary-hover: #1d4ed8;
-    --secondary-color: #64748b;
-    --success-color: #22c55e;
-    --warning-color: #f59e0b;
-    --danger-color: #ef4444;
+    /* 
+     * PRIMARY COLORS
+     * Used for interactive elements, links, and focus states
+     */
+    --primary-color: #2563eb;     /* Blue - buttons, links, focus rings */
+    --primary-hover: #1d4ed8;     /* Darker blue - hover states */
+    --secondary-color: #64748b;   /* Gray - secondary buttons, borders */
     
-    --bg-primary: #ffffff;
-    --bg-secondary: #f8fafc;
-    --bg-tertiary: #f1f5f9;
-    --bg-header: #1e293b;
+    /*
+     * SEMANTIC COLORS
+     * Used for status indicators and feedback
+     */
+    --success-color: #22c55e;     /* Green - success messages, valid states */
+    --warning-color: #f59e0b;     /* Amber - warnings, modified cells */
+    --danger-color: #ef4444;      /* Red - errors, delete buttons, invalid states */
     
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #64748b;
-    --text-inverse: #ffffff;
+    /*
+     * BACKGROUND COLORS
+     * Layered backgrounds create visual depth
+     */
+    --bg-primary: #ffffff;        /* White - main content areas */
+    --bg-secondary: #f8fafc;      /* Very light gray - page background */
+    --bg-tertiary: #f1f5f9;       /* Light gray - headers, footers, subtle sections */
+    --bg-header: #1e293b;         /* Dark slate - main header bar */
     
-    --border-color: #e2e8f0;
-    --border-radius: 6px;
+    /*
+     * TEXT COLORS
+     * Hierarchy of text colors for different purposes
+     */
+    --text-primary: #0f172a;      /* Near black - headings, important text */
+    --text-secondary: #475569;    /* Dark gray - body text, labels */
+    --text-muted: #64748b;        /* Medium gray - hints, shortcuts, placeholders */
+    --text-inverse: #ffffff;      /* White - text on dark backgrounds */
     
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    /*
+     * BORDER AND DIVIDER COLORS
+     */
+    --border-color: #e2e8f0;      /* Light gray - borders, dividers */
+    --border-radius: 6px;         /* Standard corner radius */
     
-    --transition-fast: 0.15s ease;
-    --transition-normal: 0.2s ease;
+    /*
+     * BOX SHADOWS
+     * Three levels of shadow for different elevations
+     */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);    /* Subtle shadow for cards */
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1); /* Medium shadow for popovers */
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1); /* Large shadow for dialogs */
     
-    --header-height: 48px;
-    --toolbar-height: 40px;
-    --status-height: 28px;
+    /*
+     * TRANSITIONS
+     * Consistent animation timing for interactive elements
+     */
+    --transition-fast: 0.15s ease;   /* Quick transitions (hover states) */
+    --transition-normal: 0.2s ease;  /* Standard transitions (dialogs) */
+    
+    /*
+     * LAYOUT DIMENSIONS
+     * Fixed heights for consistent layout structure
+     */
+    --header-height: 48px;        /* Main header bar height */
+    --toolbar-height: 40px;       /* Icon toolbar height */
+    --status-height: 28px;        /* Bottom status bar height */
 }
 
-/* Reset & Base */
+/*
+ * ============================================================================
+ * RESET & BASE STYLES
+ * ============================================================================
+ * Normalize browser defaults and establish base typography.
+ */
+
+/* 
+ * Universal Box Sizing
+ * Include padding and border in element's total width/height.
+ * This simplifies layout calculations significantly.
+ */
 *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
+/*
+ * HTML and Body Setup
+ * Full viewport height with system font stack.
+ * Body uses flexbox for vertical layout of header/main/footer.
+ */
 html, body {
     height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -56,10 +144,16 @@ html, body {
 body {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: hidden;  /* Prevent body scroll - content areas scroll internally */
 }
 
-/* Header */
+/*
+ * ============================================================================
+ * HEADER
+ * ============================================================================
+ * Top navigation bar containing logo, menus, and radio status.
+ * Uses dark background for visual distinction from content.
+ */
 .header {
     display: flex;
     align-items: center;
@@ -68,9 +162,13 @@ body {
     color: var(--text-inverse);
     padding: 0 16px;
     gap: 16px;
-    flex-shrink: 0;
+    flex-shrink: 0;  /* Don't shrink when content overflows */
 }
 
+/*
+ * Logo/Branding
+ * Application icon and title in the header left side.
+ */
 .logo {
     display: flex;
     align-items: center;
@@ -84,17 +182,32 @@ body {
     width: 28px;
 }
 
-/* Menu Bar */
+/*
+ * ============================================================================
+ * MENU BAR
+ * ============================================================================
+ * Desktop-style dropdown menu system.
+ * Menus open on hover using pure CSS (no JavaScript needed for opening).
+ * Menu items have keyboard shortcuts displayed on the right.
+ */
 .menu-bar {
     display: flex;
     gap: 2px;
-    flex: 1;
+    flex: 1;  /* Take remaining space in header */
 }
 
+/*
+ * Menu Dropdown Container
+ * Each top-level menu (File, Edit, Radio, Help) is a dropdown.
+ */
 .menu-dropdown {
-    position: relative;
+    position: relative;  /* Anchor for absolute-positioned dropdown */
 }
 
+/*
+ * Menu Button (Top-Level)
+ * Clickable button that opens the dropdown on hover.
+ */
 .menu-button {
     background: transparent;
     border: none;
@@ -107,28 +220,43 @@ body {
 }
 
 .menu-button:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.1);  /* Subtle white overlay on hover */
 }
 
+/*
+ * Menu Dropdown Content
+ * The actual dropdown panel containing menu items.
+ * Hidden by default, shown on parent hover.
+ */
 .menu-content {
     display: none;
     position: absolute;
-    top: 100%;
+    top: 100%;           /* Position below the button */
     left: 0;
     min-width: 200px;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-lg);
-    z-index: 1000;
+    z-index: 1000;       /* Above other content */
     padding: 4px 0;
 }
 
+/*
+ * Show Menu on Hover
+ * CSS-only dropdown - no JavaScript needed for opening.
+ * Menu stays open while hovering over button OR content.
+ */
 .menu-dropdown:hover > .menu-content,
 .menu-content:hover {
     display: block;
 }
 
+/*
+ * Menu Item
+ * Individual clickable items within the dropdown.
+ * Displays label on left, keyboard shortcut on right.
+ */
 .menu-item {
     display: flex;
     justify-content: space-between;
@@ -143,35 +271,55 @@ body {
     background: var(--bg-tertiary);
 }
 
+/*
+ * Disabled Menu Item
+ * Grayed out and non-interactive.
+ */
 .menu-item.disabled {
     opacity: 0.5;
     pointer-events: none;
 }
 
+/*
+ * Menu Keyboard Shortcut
+ * Right-aligned hint showing keyboard shortcut.
+ */
 .menu-item .shortcut {
     color: var(--text-muted);
     font-size: 12px;
     margin-left: 24px;
 }
 
+/*
+ * Submenu Arrow Indicator
+ * Right-pointing triangle indicating a submenu exists.
+ */
 .menu-item .arrow {
     font-size: 10px;
     margin-left: auto;
 }
 
+/*
+ * Menu Divider
+ * Horizontal line separating menu sections.
+ */
 .menu-divider {
     height: 1px;
     background: var(--border-color);
     margin: 4px 0;
 }
 
+/*
+ * Submenu Container
+ * Nested menu that opens to the right.
+ */
 .menu-submenu {
     position: relative;
 }
 
 .menu-submenu .submenu {
     position: absolute;
-    left: 100%;
+    left: 100%;   /* Position to the right of parent */
     top: 0;
     display: none;
 }
@@ -180,13 +328,23 @@ body {
     display: block;
 }
 
+/*
+ * Radio Status Display
+ * Shows current radio vendor/model in header right side.
+ */
 .radio-status {
-    margin-left: auto;
+    margin-left: auto;  /* Push to right side */
     font-size: 13px;
     color: rgba(255, 255, 255, 0.7);
 }
 
-/* Toolbar */
+/*
+ * ============================================================================
+ * TOOLBAR
+ * ============================================================================
+ * Quick-access icon buttons below the header.
+ * Provides one-click access to common operations.
+ */
 .toolbar {
     display: flex;
     align-items: center;
@@ -198,6 +356,10 @@ body {
     flex-shrink: 0;
 }
 
+/*
+ * Toolbar Button
+ * Square icon button with SVG icon inside.
+ */
 .toolbar-btn {
     display: flex;
     align-items: center;
@@ -221,11 +383,19 @@ body {
     background: var(--border-color);
 }
 
+/*
+ * Disabled Toolbar Button
+ * Faded appearance, non-interactive.
+ */
 .toolbar-btn.disabled {
     opacity: 0.4;
     pointer-events: none;
 }
 
+/*
+ * Toolbar Divider
+ * Vertical line separating button groups.
+ */
 .toolbar-divider {
     width: 1px;
     height: 24px;
@@ -233,44 +403,71 @@ body {
     margin: 0 4px;
 }
 
-/* Main Content */
+/*
+ * ============================================================================
+ * MAIN CONTENT AREA
+ * ============================================================================
+ * Primary content area containing the memory channel grid.
+ * Fills remaining vertical space and scrolls independently.
+ */
 .main-content {
-    flex: 1;
-    overflow: hidden;
+    flex: 1;             /* Fill remaining vertical space */
+    overflow: hidden;    /* Container doesn't scroll; child does */
     display: flex;
     flex-direction: column;
 }
 
+/*
+ * Memory Grid Container
+ * Scrollable container for the channel table.
+ */
 .memory-grid-container {
     flex: 1;
-    overflow: auto;
+    overflow: auto;      /* Enable scrolling when content overflows */
     background: var(--bg-primary);
 }
 
 .memory-grid {
-    min-width: 100%;
+    min-width: 100%;     /* At least as wide as container */
 }
 
-/* Memory Table */
+/*
+ * ============================================================================
+ * MEMORY TABLE
+ * ============================================================================
+ * The main data grid showing radio memory channels.
+ * Features:
+ *   - Sticky headers (stay visible while scrolling)
+ *   - Sortable columns (click header to sort)
+ *   - Resizable columns (drag column edges)
+ *   - Inline cell editing
+ *   - Row selection with visual highlighting
+ *   - Modified/invalid cell indicators
+ */
 .memory-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
 }
 
+/*
+ * Table Header Cells
+ * Fixed at top of scrolling area.
+ * Clickable for sorting, draggable edges for resizing.
+ */
 .memory-table th {
     position: sticky;
-    top: 0;
+    top: 0;              /* Stick to top of scroll container */
     background: var(--bg-tertiary);
     border-bottom: 2px solid var(--border-color);
     padding: 8px 12px;
     text-align: left;
     font-weight: 600;
     white-space: nowrap;
-    cursor: pointer;
-    user-select: none;
+    cursor: pointer;     /* Indicate sortable */
+    user-select: none;   /* Prevent text selection while clicking */
     transition: background var(--transition-fast);
-    position: relative;
+    position: relative;  /* Anchor for resize handle */
     min-width: 50px;
 }
 
@@ -278,6 +475,10 @@ body {
     background: var(--border-color);
 }
 
+/*
+ * Sort Direction Indicators
+ * Triangle symbols appended to sorted column header.
+ */
 .memory-table th.sort-asc::after {
     content: ' ▲';
     font-size: 10px;
@@ -288,7 +489,11 @@ body {
     font-size: 10px;
 }
 
-/* Column resize handle */
+/*
+ * Column Resize Handle
+ * Invisible draggable area on right edge of header cells.
+ * Highlighted on hover to show it's draggable.
+ */
 .memory-table th .resize-handle {
     position: absolute;
     right: 0;
@@ -303,13 +508,17 @@ body {
 
 .memory-table th .resize-handle:hover,
 .memory-table th .resize-handle.resizing {
-    background: var(--primary-color);
+    background: var(--primary-color);  /* Highlight when dragging */
 }
 
 .memory-table th.resizing {
     cursor: col-resize;
 }
 
+/*
+ * Column Resizing Mode
+ * Applied to body during column resize to maintain cursor style.
+ */
 body.resizing-column {
     cursor: col-resize !important;
     user-select: none;
@@ -319,6 +528,10 @@ body.resizing-column * {
     cursor: col-resize !important;
 }
 
+/*
+ * Table Data Cells
+ * Standard cell styling with bottom border for row separation.
+ */
 .memory-table td {
     padding: 6px 12px;
     border-bottom: 1px solid var(--border-color);
@@ -326,28 +539,42 @@ body.resizing-column * {
     color: var(--text-primary);
 }
 
+/*
+ * Empty Row Styling
+ * Rows without data shown with muted text.
+ */
 .memory-table tr.empty td {
     color: var(--text-secondary);
 }
 
-/* Modified cells (unsaved changes) */
+/*
+ * Modified Cells (Unsaved Changes)
+ * Yellow highlight to indicate changes not yet saved to file.
+ */
 .memory-table td.modified {
-    background-color: #fef9c3 !important;
+    background-color: #fef9c3 !important;  /* Light yellow */
 }
 
 .memory-table tr.selected td.modified {
-    background-color: #fef08a !important;
+    background-color: #fef08a !important;  /* Darker yellow when selected */
 }
 
-/* Invalid cells */
+/*
+ * Invalid Cells
+ * Red highlight to indicate validation errors.
+ */
 .memory-table td.invalid {
-    background-color: #fee2e2 !important;
+    background-color: #fee2e2 !important;  /* Light red */
 }
 
 .memory-table tr.selected td.invalid {
-    background-color: #fecaca !important;
+    background-color: #fecaca !important;  /* Darker red when selected */
 }
 
+/*
+ * Selected Row
+ * Blue tint to show the row is selected.
+ */
 .memory-table tr.selected {
     background: rgba(37, 99, 235, 0.1);
 }
@@ -356,6 +583,10 @@ body.resizing-column * {
     background: rgba(37, 99, 235, 0.1);
 }
 
+/*
+ * Row Hover Effect
+ * Subtle background change on hover (non-selected rows only).
+ */
 .memory-table tr:hover:not(.selected) {
     background: var(--bg-secondary);
 }
@@ -364,7 +595,10 @@ body.resizing-column * {
     background: var(--bg-secondary);
 }
 
-/* Editable cells */
+/*
+ * Editable Cells
+ * Visual indicator that cell can be clicked to edit.
+ */
 .memory-table td.editable {
     cursor: text;
 }
@@ -375,12 +609,27 @@ body.resizing-column * {
     outline-offset: -1px;
 }
 
+/*
+ * Cell in Edit Mode
+ * No padding - editor fills the cell.
+ */
 .memory-table td.editing {
     padding: 0;
     background: var(--bg-primary) !important;
 }
 
-/* Inline cell editors */
+/*
+ * ============================================================================
+ * INLINE CELL EDITORS
+ * ============================================================================
+ * Input fields and dropdowns that appear when editing a cell.
+ * Styled to blend seamlessly with the table.
+ */
+
+/*
+ * Base Cell Editor Style
+ * Shared styles for both input and select editors.
+ */
 .cell-editor {
     width: 100%;
     height: 100%;
@@ -394,20 +643,35 @@ body.resizing-column * {
     box-sizing: border-box;
 }
 
+/*
+ * Text Input Editor
+ */
 .cell-input {
     padding: 4px 8px;
 }
 
+/*
+ * Dropdown Select Editor
+ */
 .cell-select {
     padding: 2px 4px;
     cursor: pointer;
 }
 
+/*
+ * Editor Focus State
+ * Outer glow to indicate focus.
+ */
 .cell-editor:focus {
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
-/* Status Bar */
+/*
+ * ============================================================================
+ * STATUS BAR
+ * ============================================================================
+ * Bottom bar showing status messages and selection info.
+ */
 .status-bar {
     display: flex;
     align-items: center;
@@ -421,7 +685,13 @@ body.resizing-column * {
     flex-shrink: 0;
 }
 
-/* Dialog Overlay */
+/*
+ * ============================================================================
+ * DIALOG OVERLAY
+ * ============================================================================
+ * Semi-transparent backdrop behind modal dialogs.
+ * Clicking overlay closes the dialog (handled by JavaScript).
+ */
 .dialog-overlay {
     position: fixed;
     top: 0;
@@ -435,17 +705,27 @@ body.resizing-column * {
     z-index: 999;
 }
 
+/*
+ * Visible Overlay State
+ * Toggled by adding/removing .visible class.
+ */
 .dialog-overlay.visible {
     opacity: 1;
     visibility: visible;
 }
 
-/* Dialogs */
+/*
+ * ============================================================================
+ * DIALOGS
+ * ============================================================================
+ * Modal dialog boxes for editing, settings, confirmations, etc.
+ * Centered on screen with scale animation on open.
+ */
 .dialog {
     position: fixed;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.95);
+    transform: translate(-50%, -50%) scale(0.95);  /* Centered + slightly scaled */
     background: var(--bg-primary);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-lg);
@@ -461,16 +741,28 @@ body.resizing-column * {
     z-index: 1000;
 }
 
+/*
+ * Visible Dialog State
+ * Full opacity and scale for open animation.
+ */
 .dialog.visible {
     opacity: 1;
     visibility: visible;
     transform: translate(-50%, -50%) scale(1);
 }
 
+/*
+ * Large Dialog Variant
+ * Used for dialogs needing more horizontal space (RepeaterBook).
+ */
 .dialog.dialog-large {
     min-width: 700px;
 }
 
+/*
+ * Dialog Header
+ * Title bar with close button.
+ */
 .dialog-header {
     display: flex;
     align-items: center;
@@ -484,6 +776,10 @@ body.resizing-column * {
     font-weight: 600;
 }
 
+/*
+ * Dialog Close Button (X)
+ * Positioned in header, right side.
+ */
 .dialog-close {
     background: none;
     border: none;
@@ -506,12 +802,20 @@ body.resizing-column * {
     color: var(--text-primary);
 }
 
+/*
+ * Dialog Body
+ * Main content area with internal scrolling if needed.
+ */
 .dialog-body {
     padding: 20px;
     overflow-y: auto;
     flex: 1;
 }
 
+/*
+ * Dialog Footer
+ * Action buttons aligned to the right.
+ */
 .dialog-footer {
     display: flex;
     justify-content: flex-end;
@@ -521,7 +825,17 @@ body.resizing-column * {
     background: var(--bg-secondary);
 }
 
-/* Forms */
+/*
+ * ============================================================================
+ * FORMS
+ * ============================================================================
+ * Form layout and input styling for dialogs.
+ */
+
+/*
+ * Form Row
+ * Horizontal layout with label and input.
+ */
 .form-row {
     display: flex;
     align-items: center;
@@ -529,12 +843,20 @@ body.resizing-column * {
     gap: 12px;
 }
 
+/*
+ * Form Label
+ * Fixed width for alignment across multiple rows.
+ */
 .form-row label {
     min-width: 120px;
     font-weight: 500;
     color: var(--text-secondary);
 }
 
+/*
+ * Form Inputs
+ * Text inputs, number inputs, and selects.
+ */
 .form-row input[type="text"],
 .form-row input[type="number"],
 .form-row select {
@@ -547,6 +869,10 @@ body.resizing-column * {
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
+/*
+ * Form Input Focus State
+ * Blue border and subtle glow.
+ */
 .form-row input:focus,
 .form-row select:focus {
     outline: none;
@@ -554,6 +880,10 @@ body.resizing-column * {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
+/*
+ * Invalid Input State
+ * Red border and background for validation errors.
+ */
 .form-row input.input-invalid {
     border-color: var(--danger-color);
     background-color: #fee2e2;
@@ -564,12 +894,25 @@ body.resizing-column * {
     box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
 }
 
+/*
+ * Checkbox Input
+ */
 .form-row input[type="checkbox"] {
     width: 16px;
     height: 16px;
 }
 
-/* Buttons */
+/*
+ * ============================================================================
+ * BUTTONS
+ * ============================================================================
+ * Button styles for dialogs and forms.
+ */
+
+/*
+ * Base Button
+ * Default appearance with border and white background.
+ */
 .btn {
     display: inline-flex;
     align-items: center;
@@ -589,6 +932,10 @@ body.resizing-column * {
     background: var(--bg-tertiary);
 }
 
+/*
+ * Primary Button
+ * Blue button for primary actions (Save, OK, etc.).
+ */
 .btn-primary {
     background: var(--primary-color);
     border-color: var(--primary-color);
@@ -600,6 +947,10 @@ body.resizing-column * {
     border-color: var(--primary-hover);
 }
 
+/*
+ * Danger Button
+ * Red button for destructive actions (Delete, etc.).
+ */
 .btn-danger {
     background: var(--danger-color);
     border-color: var(--danger-color);
@@ -611,18 +962,36 @@ body.resizing-column * {
     border-color: #dc2626;
 }
 
-/* RepeaterBook Results */
+/*
+ * ============================================================================
+ * REPEATERBOOK RESULTS
+ * ============================================================================
+ * Styling for the RepeaterBook search results table.
+ */
+
+/*
+ * Search Form Section
+ * Contains filters, separated from results by border.
+ */
 .rb-search-form {
     padding-bottom: 16px;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 16px;
 }
 
+/*
+ * Results Container
+ * Scrollable area for search results.
+ */
 .rb-results {
     max-height: 400px;
     overflow-y: auto;
 }
 
+/*
+ * Results Table
+ * Similar to memory table but in dialog.
+ */
 .rb-results-table {
     width: 100%;
     border-collapse: collapse;
@@ -647,11 +1016,24 @@ body.resizing-column * {
     background: var(--bg-secondary);
 }
 
+/*
+ * Error Message in Results
+ */
 .rb-results .error {
     color: var(--danger-color);
 }
 
-/* Progress Bar */
+/*
+ * ============================================================================
+ * PROGRESS BAR
+ * ============================================================================
+ * Visual progress indicator for upload/download operations.
+ */
+
+/*
+ * Progress Bar Container
+ * Background track for the fill bar.
+ */
 .progress-bar {
     width: 100%;
     height: 8px;
@@ -661,6 +1043,11 @@ body.resizing-column * {
     margin-bottom: 12px;
 }
 
+/*
+ * Progress Fill
+ * Animated bar showing completion percentage.
+ * Width set dynamically via JavaScript.
+ */
 .progress-fill {
     height: 100%;
     background: var(--primary-color);
@@ -668,7 +1055,12 @@ body.resizing-column * {
     width: 0%;
 }
 
-/* About Dialog */
+/*
+ * ============================================================================
+ * ABOUT DIALOG
+ * ============================================================================
+ * Centered content styling for About dialog.
+ */
 .about-content {
     text-align: center;
 }
@@ -707,7 +1099,12 @@ body.resizing-column * {
     text-decoration: underline;
 }
 
-/* Scrollbar Styling */
+/*
+ * ============================================================================
+ * SCROLLBAR STYLING
+ * ============================================================================
+ * Custom scrollbar appearance for webkit browsers (Chrome, Safari, Edge).
+ */
 ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -726,21 +1123,34 @@ body.resizing-column * {
     background: var(--text-muted);
 }
 
-/* Selection */
+/*
+ * ============================================================================
+ * TEXT SELECTION
+ * ============================================================================
+ * Custom selection color matching theme.
+ */
 ::selection {
     background: rgba(37, 99, 235, 0.2);
 }
 
-/* Responsive adjustments */
+/*
+ * ============================================================================
+ * RESPONSIVE ADJUSTMENTS
+ * ============================================================================
+ * Adaptations for smaller screens (tablets, phones).
+ */
 @media (max-width: 768px) {
+    /* Reduce header padding */
     .header {
         padding: 0 8px;
     }
     
+    /* Hide menu bar on mobile - would need hamburger menu */
     .menu-bar {
         display: none;
     }
     
+    /* Dialogs take more screen width */
     .dialog {
         min-width: 90vw;
     }
@@ -749,6 +1159,7 @@ body.resizing-column * {
         min-width: 90vw;
     }
     
+    /* Stack form labels above inputs */
     .form-row {
         flex-direction: column;
         align-items: stretch;
@@ -759,8 +1170,14 @@ body.resizing-column * {
     }
 }
 
-/* Print styles */
+/*
+ * ============================================================================
+ * PRINT STYLES
+ * ============================================================================
+ * Optimizations for printing the channel list.
+ */
 @media print {
+    /* Hide non-content elements */
     .header,
     .toolbar,
     .status-bar,
@@ -769,10 +1186,12 @@ body.resizing-column * {
         display: none;
     }
     
+    /* Remove scroll constraints */
     .main-content {
         overflow: visible;
     }
     
+    /* Unstick headers for printing */
     .memory-table th {
         position: static;
     }

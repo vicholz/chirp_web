@@ -1,107 +1,284 @@
 <!DOCTYPE html>
+<!--
+================================================================================
+CHIRP Web - Main HTML Document
+================================================================================
+
+OVERVIEW:
+This is the main HTML file for CHIRP Web, a web-based amateur radio programming
+application. It provides a browser-based interface for:
+  - Editing radio memory channels (frequencies, tones, modes, etc.)
+  - Loading/saving CHIRP CSV and IMG files
+  - Direct radio communication via Web Serial API
+  - RepeaterBook integration for repeater lookups
+
+ARCHITECTURE:
+The application follows a single-page application (SPA) pattern with:
+  - Static HTML structure defined here
+  - Dynamic content rendered by JavaScript (app.js)
+  - CSS styling in styles.css
+  - ES6 modules for code organization
+
+UI COMPONENTS:
+  1. Header    - Logo, menu bar, radio info
+  2. Toolbar   - Quick-access buttons
+  3. Main      - Memory channel grid (editable table)
+  4. Footer    - Status bar
+  5. Dialogs   - Modal dialogs for editing, settings, etc.
+
+FILE FORMAT SUPPORT:
+  - .csv   - CHIRP CSV format (human-readable channel data)
+  - .img   - Binary radio image with metadata
+  - .chirp - CHIRP project file format
+
+WEB SERIAL API:
+The application uses the Web Serial API for direct radio communication.
+This API is only available in Chromium-based browsers (Chrome, Edge).
+Serial communication enables:
+  - Downloading channel data FROM the radio
+  - Uploading modified channels TO the radio
+
+================================================================================
+-->
 <html lang="en">
 <head>
+    <!-- Character encoding for international characters in channel names -->
     <meta charset="UTF-8">
+    
+    <!-- Viewport configuration for responsive design -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Page title - dynamically updated by app.js to show filename and modification status -->
     <title>CHIRP Web</title>
+    
+    <!-- Main stylesheet - defines all visual styling and theming -->
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- Favicon - uses the CHIRP project logo -->
     <link rel="icon" type="image/png" href="../chirp/share/chirp.png">
 </head>
 <body>
-    <!-- Hidden file input -->
+    <!--
+    ============================================================================
+    HIDDEN FILE INPUT
+    ============================================================================
+    This invisible file input is triggered programmatically when user clicks
+    "Open" in the menu. It accepts:
+      - .csv  : CHIRP CSV export files
+      - .img  : Binary radio memory images
+      - .chirp: CHIRP project files (planned)
+    
+    The 'change' event is handled by app.js to read and parse the selected file.
+    -->
     <input type="file" id="file-input" accept=".csv,.img,.chirp" style="display: none">
 
-    <!-- Header with menu bar -->
+    <!--
+    ============================================================================
+    HEADER SECTION
+    ============================================================================
+    Contains:
+      - Application logo and title
+      - Main menu bar with dropdown menus
+      - Radio status display (vendor/model when connected)
+    
+    The header uses a dark theme (--bg-header) for visual distinction.
+    -->
     <header class="header">
+        <!-- Application branding with logo image -->
         <div class="logo">
+            <!-- Logo image with fallback if not found -->
             <img src="../chirp/share/chirp.png" alt="CHIRP" class="logo-img" onerror="this.style.display='none'">
+            <!-- Title text - updated dynamically to show current filename -->
             <span id="header-title">CHIRP Web</span>
         </div>
+        
+        <!--
+        ========================================================================
+        MENU BAR
+        ========================================================================
+        Classic desktop-style dropdown menu system.
+        Menus are activated on hover using pure CSS.
+        Menu items trigger JavaScript handlers defined in app.js.
+        -->
         <nav class="menu-bar">
+            <!--
+            ====================================================================
+            FILE MENU
+            ====================================================================
+            File operations:
+              - New       : Create empty channel list
+              - Open      : Load .csv or .img file
+              - Save      : Save to current file
+              - Save As   : Save with new filename
+              - Import    : Merge channels from another file
+              - Export    : Export to CSV format
+              - Stock Cfg : Load preset channel configurations (FRS, GMRS, etc.)
+            -->
             <div class="menu-dropdown">
                 <button class="menu-button">File</button>
                 <div class="menu-content">
+                    <!-- Create new empty radio image -->
                     <div class="menu-item" id="menu-new">
                         <span>New</span>
                         <span class="shortcut">Ctrl+N</span>
                     </div>
+                    <!-- Open file dialog -->
                     <div class="menu-item" id="menu-open">
                         <span>Open...</span>
                         <span class="shortcut">Ctrl+O</span>
                     </div>
                     <div class="menu-divider"></div>
+                    <!-- Save to current file -->
                     <div class="menu-item" id="menu-save">
                         <span>Save</span>
                         <span class="shortcut">Ctrl+S</span>
                     </div>
+                    <!-- Save with new filename -->
                     <div class="menu-item" id="menu-save-as">
                         <span>Save As...</span>
                         <span class="shortcut">Ctrl+Shift+S</span>
                     </div>
                     <div class="menu-divider"></div>
+                    <!-- Import channels from another file (merge) -->
                     <div class="menu-item" id="menu-import">
                         <span>Import...</span>
                     </div>
+                    <!-- Export to CHIRP CSV format -->
                     <div class="menu-item" id="menu-export">
                         <span>Export to CSV...</span>
                         <span class="shortcut">Ctrl+E</span>
                     </div>
                     <div class="menu-divider"></div>
+                    <!--
+                    Stock Configuration Submenu
+                    Pre-defined channel lists for common radio services:
+                      - US FRS/GMRS  : Family Radio Service / General Mobile Radio Service
+                      - US MURS      : Multi-Use Radio Service
+                      - US NOAA      : Weather radio frequencies
+                      - US Marine    : VHF marine channels
+                      - US Calling   : Amateur radio calling frequencies
+                      - EU PMR446    : European license-free frequencies
+                    
+                    Submenu items are dynamically populated by JavaScript.
+                    -->
                     <div class="menu-submenu">
                         <div class="menu-item">
                             <span>Open Stock Config</span>
+                            <!-- Unicode right-pointing triangle for submenu indicator -->
                             <span class="arrow">&#9654;</span>
                         </div>
                         <div class="menu-content submenu" id="stock-config-menu">
-                            <!-- Populated by JavaScript -->
+                            <!-- Populated by JavaScript from STOCK_CONFIGS in repeaterbook.js -->
                         </div>
                     </div>
                 </div>
             </div>
 
+            <!--
+            ====================================================================
+            EDIT MENU
+            ====================================================================
+            Standard editing operations for channel management:
+              - Cut/Copy/Paste : Clipboard operations for channels
+              - Delete         : Remove selected channels
+              - Select All     : Select all non-empty channels
+              - Insert Row     : Add new channel at selection
+            
+            These operate on entire channel rows, not individual cells.
+            -->
             <div class="menu-dropdown">
                 <button class="menu-button">Edit</button>
                 <div class="menu-content">
+                    <!-- Cut selected channels to clipboard -->
                     <div class="menu-item" id="menu-cut">
                         <span>Cut</span>
                         <span class="shortcut">Ctrl+X</span>
                     </div>
+                    <!-- Copy selected channels to clipboard -->
                     <div class="menu-item" id="menu-copy">
                         <span>Copy</span>
                         <span class="shortcut">Ctrl+C</span>
                     </div>
+                    <!-- Paste channels from clipboard at selection -->
                     <div class="menu-item" id="menu-paste">
                         <span>Paste</span>
                         <span class="shortcut">Ctrl+V</span>
                     </div>
+                    <!-- Delete selected channels (mark as empty) -->
                     <div class="menu-item" id="menu-delete">
                         <span>Delete</span>
                         <span class="shortcut">Del</span>
                     </div>
                     <div class="menu-divider"></div>
+                    <!-- Select all non-empty channels -->
                     <div class="menu-item" id="menu-select-all">
                         <span>Select All</span>
                         <span class="shortcut">Ctrl+A</span>
                     </div>
                     <div class="menu-divider"></div>
+                    <!-- Insert/edit channel at selection -->
                     <div class="menu-item" id="menu-insert">
                         <span>Insert Row</span>
                     </div>
                 </div>
             </div>
 
+            <!--
+            ====================================================================
+            RADIO MENU
+            ====================================================================
+            Radio communication functions using Web Serial API:
+              - Download : Read channel data FROM the connected radio
+              - Upload   : Write channel data TO the connected radio
+              - Query RB : Search RepeaterBook database for repeaters
+            
+            Download/Upload require:
+              1. Chromium-based browser (Chrome, Edge)
+              2. USB programming cable
+              3. Supported radio model
+              4. Radio in correct mode (usually normal operation or "clone" mode)
+            -->
             <div class="menu-dropdown">
                 <button class="menu-button">Radio</button>
                 <div class="menu-content">
+                    <!--
+                    Download from Radio
+                    Process:
+                      1. User selects vendor/model
+                      2. System prompts for serial port
+                      3. Handshake with radio (magic bytes)
+                      4. Read memory blocks
+                      5. Decrypt if needed (some radios use XOR encryption)
+                      6. Parse memory into channel objects
+                    -->
                     <div class="menu-item" id="menu-download">
                         <span>Download from radio...</span>
                         <span class="shortcut">Alt+D</span>
                     </div>
+                    <!--
+                    Upload to Radio
+                    Process:
+                      1. Serialize channels to binary format
+                      2. Encrypt if needed
+                      3. Handshake with radio
+                      4. Write memory blocks
+                      5. Radio acknowledges each block
+                    -->
                     <div class="menu-item" id="menu-upload">
                         <span>Upload to radio...</span>
                         <span class="shortcut">Alt+U</span>
                     </div>
                     <div class="menu-divider"></div>
+                    <!--
+                    RepeaterBook Query
+                    Search the RepeaterBook online database for:
+                      - Repeaters by country/state/city
+                      - Filter by band (2m, 70cm, etc.)
+                      - Filter by mode (FM, DMR, D-Star, etc.)
+                      - Import selected repeaters as channels
+                    
+                    Note: May require CORS proxy due to browser security.
+                    -->
                     <div class="menu-item" id="menu-query-rb">
                         <span>Query RepeaterBook...</span>
                         <span class="shortcut">Alt+B</span>
@@ -109,42 +286,81 @@
                 </div>
             </div>
 
+            <!--
+            ====================================================================
+            HELP MENU
+            ====================================================================
+            -->
             <div class="menu-dropdown">
                 <button class="menu-button">Help</button>
                 <div class="menu-content">
+                    <!-- Show About dialog with version info -->
                     <div class="menu-item" id="menu-about">
                         <span>About CHIRP Web</span>
                     </div>
+                    <!-- Open CHIRP documentation in new tab -->
                     <div class="menu-item" id="menu-docs">
                         <span>Documentation</span>
                     </div>
                 </div>
             </div>
         </nav>
+        
+        <!--
+        Radio Status Display
+        Shows currently loaded radio vendor and model.
+        Updated by app.js when file is loaded or radio is connected.
+        Example: "Baofeng UV-5R" or "Generic CSV"
+        -->
         <div class="radio-status">
             <span id="radio-info"></span>
         </div>
     </header>
 
-    <!-- Toolbar -->
+    <!--
+    ============================================================================
+    TOOLBAR
+    ============================================================================
+    Quick-access icon buttons for common operations.
+    Each button triggers the same handler as its corresponding menu item.
+    Buttons use inline SVG icons for crisp rendering at any size.
+    
+    Button groups:
+      - File operations (New, Open, Save)
+      - Radio operations (Download, Upload)
+      - Clipboard operations (Cut, Copy, Paste, Delete)
+    
+    Vertical dividers separate logical groups.
+    -->
     <div class="toolbar">
+        <!-- Create new file -->
         <button class="toolbar-btn" id="tb-new" title="New (Ctrl+N)">
             <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
         </button>
+        <!-- Open file -->
         <button class="toolbar-btn" id="tb-open" title="Open (Ctrl+O)">
             <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z"/></svg>
         </button>
+        <!-- Save file -->
         <button class="toolbar-btn" id="tb-save" title="Save (Ctrl+S)">
             <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>
         </button>
+        
+        <!-- Visual separator between button groups -->
         <div class="toolbar-divider"></div>
+        
+        <!-- Download from radio (down arrow icon) -->
         <button class="toolbar-btn" id="tb-download" title="Download from radio (Alt+D)">
             <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
         </button>
+        <!-- Upload to radio (up arrow icon) -->
         <button class="toolbar-btn" id="tb-upload" title="Upload to radio (Alt+U)">
             <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M5,4H19V6H5M9,14H15V20H9M12,8L5,15H9V22H15V15H19L12,8Z"/></svg>
         </button>
+        
         <div class="toolbar-divider"></div>
+        
+        <!-- Clipboard operations -->
         <button class="toolbar-btn" id="tb-cut" title="Cut (Ctrl+X)">
             <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19,3L13,9L15,11L22,4V3M12,12.5A0.5,0.5 0 0,1 11.5,12A0.5,0.5 0 0,1 12,11.5A0.5,0.5 0 0,1 12.5,12A0.5,0.5 0 0,1 12,12.5M6,20A2,2 0 0,1 4,18C4,16.89 4.9,16 6,16A2,2 0 0,1 8,18C8,19.11 7.1,20 6,20M6,8A2,2 0 0,1 4,6C4,4.89 4.9,4 6,4A2,2 0 0,1 8,6C8,7.11 7.1,8 6,8M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64Z"/></svg>
         </button>
@@ -159,44 +375,125 @@
         </button>
     </div>
 
-    <!-- Main content area -->
+    <!--
+    ============================================================================
+    MAIN CONTENT AREA
+    ============================================================================
+    Contains the memory channel grid - the primary interface for viewing
+    and editing radio channels.
+    
+    The grid is dynamically generated by app.js and includes:
+      - Sortable column headers
+      - Resizable columns
+      - Inline cell editing
+      - Row selection (click, Ctrl+click, Shift+click)
+      - Visual indicators for modified/invalid cells
+    
+    Grid columns:
+      - Loc      : Memory location number (1-999+)
+      - Name     : Channel name (max 16 chars typically)
+      - Frequency: Receive frequency in MHz
+      - Duplex   : Offset direction (+, -, split, off)
+      - Offset   : Transmit offset in MHz
+      - Tone     : CTCSS/DCS mode (Tone, TSQL, DTCS, etc.)
+      - rTone    : Transmit CTCSS tone
+      - cTone    : Receive CTCSS tone
+      - DTCS     : DCS/DTCS code
+      - Mode     : Modulation (FM, NFM, AM, etc.)
+      - Skip     : Scan skip setting (S=Skip, P=Priority)
+      - Comment  : User notes/description
+    -->
     <main class="main-content">
         <div class="memory-grid-container">
             <div id="memory-grid" class="memory-grid">
-                <!-- Memory table will be rendered here -->
+                <!-- Memory table will be rendered here by app.js renderMemoryGrid() -->
             </div>
         </div>
     </main>
 
-    <!-- Status bar -->
+    <!--
+    ============================================================================
+    STATUS BAR
+    ============================================================================
+    Bottom bar showing:
+      - Status messages (temporary notifications)
+      - Selection info (number of rows selected)
+    
+    Updated by app.js showStatus() method.
+    -->
     <footer class="status-bar">
         <span id="status-message"></span>
         <span id="selection-info"></span>
     </footer>
 
-    <!-- Dialog overlay -->
+    <!--
+    ============================================================================
+    DIALOG OVERLAY
+    ============================================================================
+    Semi-transparent backdrop shown behind modal dialogs.
+    Clicking the overlay closes the dialog.
+    Uses CSS visibility/opacity for smooth transitions.
+    -->
     <div id="dialog-overlay" class="dialog-overlay"></div>
 
-    <!-- Edit Memory Dialog -->
+    <!--
+    ============================================================================
+    EDIT MEMORY DIALOG
+    ============================================================================
+    Full-featured editor for a single memory channel.
+    Opened by double-clicking a row or pressing Enter on selection.
+    
+    Contains form fields for all channel properties with:
+      - Input validation (keystroke filtering)
+      - Dropdown selects for enumerated values
+      - Real-time error highlighting
+    
+    The form uses JavaScript validation before saving:
+      - Frequency format validation
+      - Required field checks
+      - Value range validation
+    -->
     <div id="edit-dialog" class="dialog">
         <div class="dialog-header">
             <h3>Edit Memory</h3>
+            <!-- Close button (X) -->
             <button class="dialog-close">&times;</button>
         </div>
         <div class="dialog-body">
             <form id="edit-form">
+                <!-- Hidden field to store the memory location being edited -->
                 <input type="hidden" id="edit-location">
                 
+                <!--
+                Channel Name
+                Max length varies by radio (typically 6-16 characters).
+                Some radios only support uppercase ASCII.
+                -->
                 <div class="form-row">
                     <label for="edit-name">Name:</label>
                     <input type="text" id="edit-name" maxlength="16">
                 </div>
                 
+                <!--
+                Receive Frequency
+                Format: XXX.XXXXXX (MHz with up to 6 decimal places)
+                Stored internally in Hz for precision.
+                Example: 146.520000 for 2m calling frequency
+                -->
                 <div class="form-row">
                     <label for="edit-freq">Frequency (MHz):</label>
                     <input type="text" id="edit-freq" placeholder="146.520000">
                 </div>
                 
+                <!--
+                Duplex Mode
+                Determines transmit frequency relative to receive:
+                  - (none) : Simplex - TX = RX
+                  - +      : Positive offset - TX = RX + offset
+                  - -      : Negative offset - TX = RX - offset
+                  - split  : Cross-band - TX is a different frequency entirely
+                  - off    : Receive only - no transmit
+                -->
                 <div class="form-row">
                     <label for="edit-duplex">Duplex:</label>
                     <select id="edit-duplex">
@@ -208,11 +505,30 @@
                     </select>
                 </div>
                 
+                <!--
+                Offset Frequency
+                Used with + or - duplex to calculate TX frequency.
+                For split duplex, this is the actual TX frequency.
+                Common values: 0.600 (2m), 5.000 (70cm)
+                -->
                 <div class="form-row">
                     <label for="edit-offset">Offset (MHz):</label>
                     <input type="text" id="edit-offset" placeholder="0.600000">
                 </div>
                 
+                <!--
+                Tone Mode
+                CTCSS/DCS signaling for repeater access:
+                  - (none)  : No tone signaling
+                  - Tone    : TX CTCSS tone only
+                  - TSQL    : TX and RX CTCSS (tone squelch)
+                  - DTCS    : Digital Coded Squelch
+                  - DTCS-R  : DTCS with reversed polarity
+                  - TSQL-R  : Reversed tone squelch
+                  - Cross   : Different TX/RX tone types
+                
+                Options populated dynamically from TONE_MODES constant.
+                -->
                 <div class="form-row">
                     <label for="edit-tmode">Tone Mode:</label>
                     <select id="edit-tmode">
@@ -220,21 +536,51 @@
                     </select>
                 </div>
                 
+                <!--
+                Transmit Tone (rTone)
+                CTCSS subaudible tone for transmission.
+                Standard values: 67.0 - 254.1 Hz
+                Used when tone mode is Tone, TSQL, or Cross.
+                -->
                 <div class="form-row">
                     <label for="edit-rtone">Tx Tone:</label>
                     <select id="edit-rtone"></select>
                 </div>
                 
+                <!--
+                Receive Tone (cTone)
+                CTCSS tone for receive squelch.
+                Only opens squelch when this tone is detected.
+                Used when tone mode is TSQL or Cross.
+                -->
                 <div class="form-row">
                     <label for="edit-ctone">Rx Tone:</label>
                     <select id="edit-ctone"></select>
                 </div>
                 
+                <!--
+                DTCS Code
+                Digital Coded Squelch code (23-754).
+                Used for digital tone signaling.
+                Includes polarity setting (NN, NR, RN, RR).
+                -->
                 <div class="form-row">
                     <label for="edit-dtcs">DTCS Code:</label>
                     <select id="edit-dtcs"></select>
                 </div>
                 
+                <!--
+                Operating Mode
+                Radio modulation type:
+                  - FM   : Wideband FM (25 kHz)
+                  - NFM  : Narrowband FM (12.5 kHz)
+                  - AM   : Amplitude Modulation (aircraft band)
+                  - WFM  : Wide FM (broadcast)
+                  - DV   : D-STAR digital voice
+                  - DMR  : Digital Mobile Radio
+                  - CW   : Morse code
+                  - USB/LSB : Single Sideband
+                -->
                 <div class="form-row">
                     <label for="edit-mode">Mode:</label>
                     <select id="edit-mode">
@@ -244,6 +590,13 @@
                     </select>
                 </div>
                 
+                <!--
+                Skip Setting
+                Controls memory scan behavior:
+                  - (none) : Include in scan
+                  - S      : Skip - exclude from scan
+                  - P      : Priority - scan frequently
+                -->
                 <div class="form-row">
                     <label for="edit-skip">Skip:</label>
                     <select id="edit-skip">
@@ -253,11 +606,22 @@
                     </select>
                 </div>
                 
+                <!--
+                Power Level
+                Transmit power setting.
+                Actual values depend on radio model (Low/Med/High or specific wattage).
+                -->
                 <div class="form-row">
                     <label for="edit-power">Power:</label>
                     <input type="text" id="edit-power" placeholder="Low, Medium, High">
                 </div>
                 
+                <!--
+                Comment
+                Free-form text field for notes.
+                Typically used for repeater callsign, location, etc.
+                Not stored on most radios - only in file.
+                -->
                 <div class="form-row">
                     <label for="edit-comment">Comment:</label>
                     <input type="text" id="edit-comment">
@@ -270,19 +634,40 @@
         </div>
     </div>
 
-    <!-- RepeaterBook Dialog -->
+    <!--
+    ============================================================================
+    REPEATERBOOK DIALOG
+    ============================================================================
+    Query interface for the RepeaterBook.com repeater database.
+    Allows searching for repeaters by geographic location and filtering
+    by band and mode.
+    
+    Search criteria:
+      - Country  : United States, Canada, Mexico, or international
+      - State    : US states, Canadian provinces, Mexican states
+      - Band     : 10m, 6m, 2m, 1.25m, 70cm, 33cm, 23cm
+      - Mode     : FM, DMR, D-Star, Fusion
+      - Open only: Filter to open (non-restricted) repeaters
+    
+    Results can be selected and imported as memory channels.
+    
+    Note: Due to browser CORS restrictions, this may require a proxy server.
+    -->
     <div id="repeaterbook-dialog" class="dialog dialog-large">
         <div class="dialog-header">
             <h3>Query RepeaterBook</h3>
             <button class="dialog-close">&times;</button>
         </div>
         <div class="dialog-body">
+            <!-- Search form -->
             <div class="rb-search-form">
+                <!-- Country selection - populates state dropdown -->
                 <div class="form-row">
                     <label for="rb-country">Country:</label>
                     <select id="rb-country"></select>
                 </div>
                 
+                <!-- State/Province - dynamic based on country -->
                 <div class="form-row">
                     <label for="rb-state">State/Province:</label>
                     <select id="rb-state">
@@ -290,6 +675,7 @@
                     </select>
                 </div>
                 
+                <!-- Band filter (frequency range) -->
                 <div class="form-row">
                     <label for="rb-band">Band:</label>
                     <select id="rb-band">
@@ -297,6 +683,7 @@
                     </select>
                 </div>
                 
+                <!-- Mode filter (modulation type) -->
                 <div class="form-row">
                     <label for="rb-mode">Mode:</label>
                     <select id="rb-mode">
@@ -304,6 +691,7 @@
                     </select>
                 </div>
                 
+                <!-- Open repeaters only checkbox -->
                 <div class="form-row">
                     <label>
                         <input type="checkbox" id="rb-open-only" checked>
@@ -311,11 +699,13 @@
                     </label>
                 </div>
                 
+                <!-- Search button -->
                 <div class="form-row">
                     <button class="btn btn-primary" id="rb-search">Search</button>
                 </div>
             </div>
             
+            <!-- Search results table (populated by JavaScript) -->
             <div id="rb-results" class="rb-results">
                 <!-- Results will be displayed here -->
             </div>
@@ -325,7 +715,12 @@
         </div>
     </div>
 
-    <!-- About Dialog -->
+    <!--
+    ============================================================================
+    ABOUT DIALOG
+    ============================================================================
+    Application information and credits.
+    -->
     <div id="about-dialog" class="dialog">
         <div class="dialog-header">
             <h3>About CHIRP Web</h3>
@@ -352,13 +747,33 @@
         </div>
     </div>
 
-    <!-- Radio Selection Dialog -->
+    <!--
+    ============================================================================
+    RADIO SELECTION DIALOG
+    ============================================================================
+    Configuration dialog for radio download/upload operations.
+    
+    Users must select:
+      1. Vendor   : Radio manufacturer (Baofeng, Kenwood, Yaesu, etc.)
+      2. Model    : Specific radio model (UV-5R, UV-82, etc.)
+      3. Baud Rate: Serial communication speed (9600-115200)
+      4. Mem Size : Radio memory capacity (8KB-64KB)
+    
+    The model selection determines the communication protocol:
+      - Magic bytes for handshake
+      - Memory layout (block size, addresses)
+      - Encryption/decryption requirements
+      - Read/write command format
+    
+    Settings are saved to localStorage for convenience.
+    -->
     <div id="radio-dialog" class="dialog">
         <div class="dialog-header">
             <h3>Select Radio</h3>
             <button class="dialog-close">&times;</button>
         </div>
         <div class="dialog-body">
+            <!-- Vendor selection -->
             <div class="form-row">
                 <label for="radio-vendor">Vendor:</label>
                 <select id="radio-vendor">
@@ -377,6 +792,7 @@
                 </select>
             </div>
             
+            <!-- Model selection - populated dynamically based on vendor -->
             <div class="form-row">
                 <label for="radio-model">Model:</label>
                 <select id="radio-model">
@@ -384,6 +800,15 @@
                 </select>
             </div>
             
+            <!--
+            Baud Rate
+            Serial communication speed. Must match radio's expected rate.
+            Common values:
+              - 9600   : Most Baofeng radios (UV-5R, UV-82, etc.)
+              - 19200  : Some Wouxun models
+              - 57600  : Some Kenwood models
+              - 115200 : Newer Baofeng models (UV-17Pro, BF-F8HP Pro)
+            -->
             <div class="form-row">
                 <label for="radio-baud">Baud Rate:</label>
                 <select id="radio-baud">
@@ -395,6 +820,14 @@
                 </select>
             </div>
             
+            <!--
+            Memory Size
+            Total size of radio's programmable memory.
+              - 8KB  : Simple radios (16-128 channels)
+              - 16KB : Mid-range radios
+              - 32KB : Full-featured radios (1000+ channels)
+              - 64KB : Advanced radios with zones, scan lists, etc.
+            -->
             <div class="form-row">
                 <label for="radio-memsize">Memory Size:</label>
                 <select id="radio-memsize">
@@ -405,6 +838,7 @@
                 </select>
             </div>
             
+            <!-- User instructions -->
             <div style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: var(--border-radius);">
                 <strong>Instructions:</strong>
                 <ol style="margin: 8px 0 0 20px; font-size: 13px;">
@@ -424,15 +858,32 @@
         </div>
     </div>
 
-    <!-- Progress Dialog -->
+    <!--
+    ============================================================================
+    PROGRESS DIALOG
+    ============================================================================
+    Modal dialog showing operation progress.
+    Used during:
+      - Radio download (reading memory blocks)
+      - Radio upload (writing memory blocks)
+    
+    Features:
+      - Visual progress bar
+      - Status message (current operation)
+      - Cancel button to abort operation
+    
+    Progress updates are driven by RadioClone.onProgress callback.
+    -->
     <div id="progress-dialog" class="dialog">
         <div class="dialog-header">
             <h3 id="progress-title">Working...</h3>
         </div>
         <div class="dialog-body">
+            <!-- Progress bar with animated fill -->
             <div class="progress-bar">
                 <div class="progress-fill" id="progress-fill"></div>
             </div>
+            <!-- Status message -->
             <p id="progress-message">Please wait...</p>
         </div>
         <div class="dialog-footer">
@@ -440,10 +891,28 @@
         </div>
     </div>
 
+    <!--
+    ============================================================================
+    MAIN APPLICATION SCRIPT
+    ============================================================================
+    The main application module (ES6 module).
+    Initializes ChirpApp class and sets up all event handlers.
+    -->
     <script type="module" src="js/app.js"></script>
+    
+    <!--
+    ============================================================================
+    TOOLBAR BUTTON BINDINGS
+    ============================================================================
+    Simple script to connect toolbar buttons to menu item handlers.
+    This ensures toolbar and menu provide identical functionality.
+    Also sets up Help menu dialogs.
+    -->
     <script>
-        // Toolbar button bindings
+        // Toolbar button bindings - connects toolbar buttons to menu actions
         document.addEventListener('DOMContentLoaded', () => {
+            // Map toolbar button IDs to corresponding menu item IDs
+            // Clicking a toolbar button triggers click on the menu item
             const bindings = {
                 'tb-new': 'menu-new',
                 'tb-open': 'menu-open',
@@ -456,6 +925,7 @@
                 'tb-delete': 'menu-delete'
             };
             
+            // Create click event forwarding for each binding
             for (const [tbId, menuId] of Object.entries(bindings)) {
                 const tb = document.getElementById(tbId);
                 const menu = document.getElementById(menuId);
@@ -464,13 +934,13 @@
                 }
             }
 
-            // About dialog
+            // About dialog - show when clicking About menu item
             document.getElementById('menu-about')?.addEventListener('click', () => {
                 document.getElementById('about-dialog').classList.add('visible');
                 document.getElementById('dialog-overlay').classList.add('visible');
             });
 
-            // Documentation link
+            // Documentation link - open CHIRP wiki in new tab
             document.getElementById('menu-docs')?.addEventListener('click', () => {
                 window.open('https://chirpmyradio.com/projects/chirp/wiki/Documentation', '_blank');
             });
